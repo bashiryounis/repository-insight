@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+
+  app:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: app
+    command: "./dev_start.sh"
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./api:/app
+      - ./api/data:/app/data
+    env_file:
+      - ./secrets/.env
+    depends_on:
+      - neo4j
+    networks:
+      - app-network
+
+  neo4j:
+    image: neo4j:2025.02
+    container_name: neo4j-repo
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+    environment:
+      - NEO4J_AUTH=neo4j/passowrd
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_PLUGINS=["apoc"]
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "neo4j-admin", "server", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: on-failure
+
+networks:
+  app-network:
+    driver: bridge
+
+
+volumes:
+  neo4j_data:
