@@ -9,5 +9,7 @@ stop:
 
 logs:
 	docker-compose logs -f --tail 50
-weaviate:
-	docker-compose -f weaviate.docker-compose.yaml up --build --remove-orphans -d
+
+test:
+	docker-compose run --rm app pytest
+
