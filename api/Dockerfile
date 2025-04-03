@@ -1,8 +1,9 @@
 # Use an official Python runtime as a base image
-FROM python:3.10-slim
+FROM python:3.12-slim
 
-# Install curl and other necessary packages
-RUN apt-get update && apt-get install -y curl  && apt-get install -y build-essential libpq-dev
+# Install curl and necessary packages, including libgit2-dev for pygit2
+RUN apt-get update && \
+    apt-get install -y curl build-essential libpq-dev libgit2-dev
 
 ## install minio client (mc)
 RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc \
@@ -10,14 +11,16 @@ RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc \
     -o /usr/local/bin/mc && \
     chmod +x /usr/local/bin/mc
 
+# Install Poetry using the official installer and add it to PATH
+RUN curl -sSL https://install.python-poetry.org | python3 -
+    ENV PATH="/root/.local/bin:${PATH}"
+
 ## Create and set the working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
-COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir "uvicorn[standard]" gunicorn
+# Copy Poetry configuration files first to leverage Docker cache
+COPY pyproject.toml poetry.lock* ./
+RUN poetry install --no-root
 
 # Copy the rest of the application code
 COPY . .
