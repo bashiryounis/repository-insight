@@ -17,6 +17,7 @@ services:
       - ./secrets/.env
     depends_on:
       - neo4j
+      - jaeger
     networks:
       - app-network
 
@@ -43,6 +44,15 @@ services:
       retries: 5
       start_period: 60s
     restart: on-failure
+
+  jaeger:
+      image: jaegertracing/all-in-one:1.41
+      container_name: jaeger
+      ports:
+        - "6831:6831/udp"
+        - "16686:16686"
+      networks:
+        - app-network
 
 networks:
   app-network:
