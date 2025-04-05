@@ -9,16 +9,33 @@ from opentelemetry.exporter.zipkin.json import ZipkinExporter
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from src.core.logger_config import setup_logging
+from src.service.api import router as repo_router
 
 setup_logging()
 logger=logging.getLogger(__name__)
 
 app = FastAPI(
     debug=True,
-    title="QA Agent API",
-    description="API server providing various functionalities including user operations, file handling, and chat services.",
-)
+    title="Repo Insight API – Repository Intelligence Unleashed",
+    description="""
+    Repo Insight Agent automates repository analysis by cloning a target repo, building a Neo4j graph of its code structure, and processing natural language queries to deliver actionable insights.   
+    """
+    )
+# Set the tracer provider
+trace.set_tracer_provider(TracerProvider())
+tracer = trace.get_tracer(__name__)
 
+
+# Configure the Jaeger exporter
+jaeger_exporter = JaegerExporter(
+    agent_host_name="jaeger",
+    agent_port=6831,  # Jaeger agent port
+)
+jaeger_span_processor = BatchSpanProcessor(jaeger_exporter)
+trace.get_tracer_provider().add_span_processor(jaeger_span_processor)
+
+# Instrument the FastAPI app
+FastAPIInstrumentor.instrument_app(app, tracer_provider=trace.get_tracer_provider())
 
 
 # Configure CORS middleware to allow requests from any origin
@@ -38,3 +55,4 @@ def root_redirect():
     """
     return RedirectResponse(url="/docs/")
 
+app.include_router(repo_router, prefix="/repo", tags=["Repository Opreation"])

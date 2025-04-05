@@ -33,6 +33,7 @@ pygit2 = "^1.17.0"
 neo4j = "^5.28.1"
 llama-index-llms-google-genai = "^0.1.7"
 json-repair = "^0.40.0"
+llama-index-graph-stores-neo4j = "^0.4.6"
 
 
 [build-system]

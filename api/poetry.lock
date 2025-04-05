@@ -1474,6 +1474,21 @@ llama-index-core = ">=0.12.0,<0.13.0"
 openai = ">=1.1.0"
 
 [[package]]
+name = "llama-index-graph-stores-neo4j"
+version = "0.4.6"
+description = "llama-index graph stores neo4j integration"
+optional = false
+python-versions = "<4.0,>=3.9"
+files = [
+    {file = "llama_index_graph_stores_neo4j-0.4.6-py3-none-any.whl", hash = "sha256:097a6ab4d77bc9e289c9793bf2fdc042f686234c7b544427fda042439376ce2e"},
+    {file = "llama_index_graph_stores_neo4j-0.4.6.tar.gz", hash = "sha256:c1398b196bbf5a7aecd6c5eab382c58a025547efe20065b152fea84c519f2c14"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.0,<0.13.0"
+neo4j = ">=5.16.0,<6.0.0"
+
+[[package]]
 name = "llama-index-indices-managed-llama-cloud"
 version = "0.6.9"
 description = "llama-index indices llama-cloud integration"
@@ -3832,4 +3847,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "40760fd60f7726609077765a2235e7df4ebc588feb97870eabdc53d967168897"
+content-hash = "cb996aeb3f52bdd3c98c72346434cd183bdf4901c070fef15f97a23270f49f41"
