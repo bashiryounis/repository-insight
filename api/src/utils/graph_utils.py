@@ -1,279 +1,348 @@
 import os
+import asyncio
+import pygit2
+import logging 
 from src.core.config import config  
+from asyncio import Semaphore, Lock
 from src.core.db import get_session, close_driver
 from src.utils.git_utils import traverse_tree_sync
 from src.agent.base import run_code_analysis_agent , run_filter_agent
 from src.agent.utils import get_project_tree_string , extract_file_content
-import asyncio
-import pygit2
-import logging 
+from src.utils.helper import (
+    get_embedding, 
+    generate_stable_id, 
+    queue_dependency_relationships_safe,
+    run_dependency_relationships_batch,
+    create_containment_relationships_cypher
+)
 
 logger=logging.getLogger(__name__)
 # ------------------------------------------------------------
 # Neo4j helper functions (using async session)
 # ------------------------------------------------------------
+async def add_embeddings(
+    session,
+    node_label: str,
+    node_id: str,
+    fields: dict,
+):
+    """Embeds the given content and stores it on the node with given node_id."""
+    for field_name, content in fields.items():
+        if not content:
+            continue
+
+        embedding = get_embedding(content)
+        embed_prop = f"embedding_{field_name}"
+        query = f"""
+            MATCH (n:{node_label} {{node_id: $node_id}})
+            SET n.{embed_prop} = $embedding
+            RETURN n
+        """
+        await session.run(query, node_id=node_id, embedding=embedding)
 
 async def create_repository_node(session, name, project_tree):
     """Create or merge a repository node in Neo4j."""
-    query = (
-        f"MERGE (r:{config.REPO_LABEL} {{ name: $name }}) "
-        "SET r.project_tree = $project_tree "
-        "RETURN r"
+    node_id = generate_stable_id(name)
+    query = (f"""
+        MERGE (r:{config.REPO_LABEL} {{ node_id: $node_id }})
+        SET r.name = $name,
+            r.project_tree = $project_tree 
+        RETURN r
+    """)
+    result = await session.run(
+        query,
+        node_id=node_id,
+        name=name,
+        project_tree=project_tree
     )
-    result = await session.run(query, name=name, project_tree = project_tree)
     record = await result.single()
+
+    # Add embedding for the project tree
+    await add_embeddings(
+        session=session,
+        node_label=config.REPO_LABEL,
+        node_id=node_id,
+        fields={"content": project_tree}
+    )
     return record["r"]
 
-async def create_folder_node(session, name, path, repo_name):
+async def create_folder_node(session, name, path, parent_path):
     """Create or merge a folder node and connect it to its parent node (repository or folder)."""
-    parent_path = os.path.dirname(path)
-    if parent_path == repo_name:
-        parent_path = None  
-    logger.info(f"Running query to create folder node with name: {name}, path: {path}, parent_path: {parent_path}, repo_name: {repo_name}")
-    
-    if parent_path:
-        query = (
-            f"MERGE (f:{config.FOLDER_LABEL} {{ path: $path }}) "
-            "SET f.name = $name "
-            "WITH f "
-            f"MERGE (p:{config.FOLDER_LABEL} {{ path: $parent_path }}) "
-            "MERGE (p)-[:CONTAINS]->(f) "
-            "RETURN f"
+    node_id = generate_stable_id(f"{path}:{name}")
+    logger.info(f"Creating folder node: name={name}, path={path}, parent_path={parent_path}, node_id={node_id}")    
+
+    try:
+        query = f"""
+            MERGE (f:{config.FOLDER_LABEL} {{ node_id: $node_id }})
+            SET f.name = $name, 
+                f.path = $path , 
+                f.parent_path = $parent_path 
+            RETURN f
+        """
+        result = await session.run(query, name=name, path=path, parent_path=parent_path, node_id=node_id)
+        record = await result.single()
+
+        await add_embeddings(
+            session=session,
+            node_label=config.FOLDER_LABEL,
+            node_id=node_id,
+            fields={
+                "name":name,
+                "content": "N/A"
+            }
         )
-    else:
-        # If it's the root folder, connect to the repository node
-        query = (
-            f"MERGE (f:{config.FOLDER_LABEL} {{ path: $path }}) "
-            "SET f.name = $name "
-            "WITH f "
-            f"MERGE (p:{config.REPO_LABEL} {{ name: $repo_name }}) "
-            "MERGE (p)-[:CONTAINS]->(f) "
-            "RETURN f"
-        )
-    
-    # Run the query
-    result = await session.run(query, name=name, path=path, parent_path=parent_path, repo_name=repo_name)
-    
-    # Check the result
-    record = await result.single()
-    if record:
+
         logger.info(f"Folder node created or merged: {record['f']}")
         return record["f"]
-    else:
-        logger.error(f"Folder creation failed for path: {path}")
-        raise ValueError(f"Folder creation failed for path: {path}")
-    
 
-async def create_file_node(session, name, path, extension, repo_name, file_content=None):
-    """Create or merge a file node and connect it to its parent node (repository or folder)."""
-    parent_path = os.path.dirname(path)
-    if parent_path == repo_name:
-        parent_path = None 
-
-    logger.info(f"Running query to create file node with name: {name}, path: {path}, extension: {extension}, parent_path: {parent_path}, repo_name: {repo_name}")
-
-    # Set file content only if provided
-    set_file_content = ""
-    if file_content:
-        set_file_content = "SET f.content = $file_content "
-
-    # Construct query based on whether it's in a folder or root directory
-    if parent_path:
-        query = (
-            f"MERGE (f:{config.FILE_LABEL} {{ path: $path }}) "
-            "SET f.name = $name, f.extension = $extension "
-            + set_file_content +
-            "WITH f "
-            f"MERGE (p:{config.FOLDER_LABEL} {{ path: $parent_path }}) "  
-            "MERGE (p)-[:CONTAINS]->(f) "
-            "RETURN f"
-        )
-    else:
-        query = (
-            f"MERGE (f:{config.FILE_LABEL} {{ path: $path }}) "
-            "SET f.name = $name, f.extension = $extension "
-            + set_file_content +
-            "WITH f "
-            f"MERGE (p:{config.REPO_LABEL} {{ name: $repo_name }}) "  
-            "MERGE (p)-[:CONTAINS]->(f) "
-            "RETURN f"
-        )
-
-    try:
-        await session.run(query, 
-                         name=name, 
-                         path=path, 
-                         extension=extension, 
-                         parent_path=parent_path, 
-                         repo_name=repo_name, 
-                         file_content=file_content)
-        logger.info(f"File node created or merged for path: {path}")
-        return True
     except Exception as e:
-        logger.error(f"Error creating file node for path {path}: {str(e)}")
-        return False
+        logger.error(f"Error creating folder node {path}: {e}", exc_info=True)
+        return None
 
-async def update_node_property(session, repo_name, file_path, state):
+
+async def create_file_node(session, name, path, parent_path, file_content=None):
+    """Create or merge a file node and connect it to its parent node (repository or folder)."""
+    logger.info(f"Running query to create file node with name: {name}, path: {path}, parent_path: {parent_path}")
+    node_id = generate_stable_id(f"{path}:{name}")
+    # Set file content only if provided
+    file_content = file_content if file_content else "File is empty"
+
+    query = (f"""
+        MERGE (f:{config.FILE_LABEL} {{ node_id: $node_id }})
+        SET f.name = $name,
+            f.parent_path = $parent_path,
+            f.content = $file_content,
+            f.path = $path
+        RETURN f
+        """)
+    result = await session.run(
+        query, 
+        node_id=node_id,
+        name=name, 
+        path=path, 
+        parent_path=parent_path, 
+        file_content=file_content
+    )
+    record = await result.single()
+    logger.info(f"File node created or merged: {record['f']}")
+    await add_embeddings(
+        session=session,
+        node_label=config.FILE_LABEL,
+        node_id=node_id,
+        fields={
+            "name":name,
+            "content": file_content
+        }
+    )
+    return record["f"]
+
+async def enrich_file_node(session,path,name, state):
+    """Update the description and summary of a File node, and add their embeddings."""
     description = state.get("file_description", "")
     summary = state.get("code_summary", {})
-    file_content = state.get("file_content", "")
+    node_id = generate_stable_id(f"{path}:{name}")
     try:
-        logger.info(f"Updating node properties for file: {file_path}")
+        logger.info(f"Updating node properties for file: {path}, {name}")
         query = """
-        MATCH (file:File {path: $file_path})
+        MATCH (file:File {node_id: $node_id})
         SET file.description = $description, 
             file.summary = $summary
         RETURN file
         """
-        result = await session.run(query, 
-                                   file_path= file_path, 
-                                   description=description, 
-                                   summary=summary.get("summary",""), 
-                                )
+        result = await session.run(
+            query, 
+            node_id=node_id,
+            description=description, 
+            summary=summary.get("summary","N/A")
+        )
 
         # Return the updated node
         updated_node = await result.single()
         logger.info(f"Successfully updated node: {updated_node}")
+
+        add_embeddings(
+            session=session,
+            node_label=config.FILE_LABEL,
+            node_id=node_id,
+            fields={
+                "description": description,
+                "summary": summary.get("summary", "N/A"),
+            }
+        )
+        logger.info(f"Added embeddings for node: {node_id}")
         return updated_node
     except Exception as e:
         logger.error(f"Error updating node properties: {e}")
         raise
 
-async def create_dependency_relationships(session, state, repo_name):
+async def create_script_node(session, name, description, content, file_path):
     try:
-        logger.info(f"Creating dependency relationships for repository: {repo_name}")
-        for depend in state["dependency_analysis"]:
-            if depend["external"] == False:  # Process only internal dependencies
-                source = os.path.join(repo_name, depend["source"])
-                target = depend["target"]
-                path = os.path.join(repo_name, depend["path"])  # Full relative path for the target
-                description = depend["description"]
-                relationship_type = "RELATED_TO"
-                print(path)
-
-                # Create relationship in Neo4j
-                query = f"""
-                MATCH (source:File {{path: $source_path}})
-                MATCH (target:File {{path: $target_path}})
-                MERGE (source)-[r:{relationship_type}]->(target)
-                SET r.description = $description
-                RETURN source, target, r
-                """
-                await session.run(query, 
-                                  source_path=source, 
-                                  target_path=path, 
-                                  description=description)
-
-                logger.info(f"Created {relationship_type} relationship between {source} and {target}")
-    except Exception as e:
-        logger.error(f"Error creating dependency relationships: {e}")
-        raise
-
-async def create_script_node(session, script_name, description, code, file_path):
-    try:
-        logger.info(f"Creating/Updating script node: {script_name}")
-        query_script = """
-        MERGE (script:Script {name: $script_name, file_path: $file_path})
-        ON CREATE SET script.description = $description, script.code = $code
-        WITH script
-        MATCH (file:File {path: $file_path})
-        MERGE (file)-[:HAS]->(script)
+        node_id = generate_stable_id(f"{file_path}:{name}")
+        logger.info(f"Creating/Updating script node: {name}")
+        query_script = f"""
+        MERGE (script:{config.SCRIPT_LABEL} {{ node_id: $node_id }})
+        SET script.name= $name, 
+            script.description = $description, 
+            script.content = $content, 
+            script.file_path = $file_path
         RETURN script
         """
         result_script = await session.run(query_script, 
-                                          script_name=script_name, 
+                                          node_id=node_id,
+                                          name=name, 
                                           description=description, 
-                                          code=code,
+                                          content=content,
                                           file_path=file_path)
-        return await result_script.single()
+        result = await result_script.single()
+        await add_embeddings(
+            session=session, 
+            node_label=config.SCRIPT_LABEL,
+            node_id=node_id,
+            fields={
+                "name": name,
+                "description": description,
+                "content": content
+            }
+        )    
+        logger.info(f"Script node created or updated: {result['script']}")
+        return result["script"]
     except Exception as e:
         logger.error(f"Error creating/updating script node: {e}")
         raise
 
-async def create_class_node(session, class_name, description, docstring, code, file_path):
+async def create_class_node(session, name, description, docstring, content, file_path):
     try:
-        logger.info(f"Creating/Updating class node: {class_name}")
-        query_class = """
-        MERGE (class:Class {name: $class_name, file_path: $file_path})
-        ON CREATE SET class.description = $description, class.docstring = $docstring, class.code = $code
-        WITH class
-        MATCH (file:File {path: $file_path})
-        MERGE (file)-[:HAS]->(class)
+        logger.info(f"Creating/Updating class node: {name}")
+        node_id = generate_stable_id(f"{file_path}:{name}")
+        query_class = f"""
+        MERGE (class:{config.CLASS_LABEL} {{ node_id: $node_id }})
+        SET class.name = $name,
+            class.description = $description, 
+            class.docstring = $docstring, 
+            class.content = $content,
+            class.file_path = $file_path
         RETURN class
        """
         result_class = await session.run(query_class,
-                                         class_name=class_name,
+                                         node_id=node_id,
+                                         name=name,
                                          description=description,
                                          docstring=docstring,
-                                         code=code,
+                                         content=content,
                                          file_path=file_path)
-        return await result_class.single()
+        result = await result_class.single()
+        await add_embeddings(
+            session=session,
+            node_label=config.CLASS_LABEL,
+            node_id=node_id,
+            fields={
+                "name":name,
+                "description": description,
+                "docstring": docstring,
+                "content": content
+            }
+        )
+        logger.info(f"Class node created or updated: {result['class']}")
+        return result["class"]
     except Exception as e:
         logger.error(f"Error creating/updating class node: {e}")
         raise
 
 # Function to create or merge the Method node and connect it to the Class or File node
-async def create_method_node(session, method_name, description, docstring, code, file_path):
+async def create_method_node(session, name, description, docstring, content, file_path):
     try:
-        logger.info(f"Creating/Updating method node: {method_name}")
-        query_method = """
-        MERGE (method:Method {name: $method_name, file_path: $file_path})
-        ON CREATE SET method.description = $description, method.docstring = $docstring, method.code = $code
-        WITH method
-        MATCH (file:File {path: $file_path})
-        MERGE (file)-[:HAS]->(method)
+        logger.info(f"Creating/Updating method node: {name}")
+        node_id = generate_stable_id(f"{file_path}:{name}")
+        query_method = f"""
+        MERGE (method:{config.METHOD_LABEL} {{ node_id: $node_id }})
+        SET method.name = $name,
+            method.description = $description,
+            method.docstring = $docstring,
+            method.content = $content,
+            method.file_path = $file_path
         RETURN method
        """
         result_method = await session.run(query_method,
-                                          method_name=method_name,
+                                          node_id=node_id,
+                                          name=name,
                                           description=description,
                                           docstring=docstring,
-                                          code=code,
+                                          content=content,
                                           file_path=file_path)
         method_node = await result_method.single()
-        return method_node
+        await add_embeddings(
+            session=session,
+            node_label=config.METHOD_LABEL,
+            node_id=node_id,
+            fields={
+                "name":name,
+                "description": description,
+                "docstring": docstring,
+                "content": content
+            }
+        )
+        logger.info(f"Method node created or updated: {method_node['method']}")
+        return method_node["method"]
     except Exception as e:
         logger.error(f"Error creating/updating method node: {e}")
         raise
 
 # Main function to process the entire script, class, and method nodes
-async def create_script_class_method_relationships(session, repo_name, file_path, state):
+async def enrich_script_class_method(session, file_path, state):
     try:
-        file_name = os.path.basename(file_path)
+        # Extract class and method information from the state
+        classes = state.get("classes", [])
+        methods = state.get("methods", [])
+        scripts = state.get("scripts", [])
 
-        for script in state.get("scripts", []):
-            script_node = await create_script_node(session, 
-                                                   script["script_name"], 
-                                                   script["description"], 
-                                                   script["code"], 
-                                                   file_path)
+        if not classes and not methods and not scripts:
+            logger.info(f"No classes/methods/scripts found in {file_path}. Skipping enrichment.")
+            return
+        
+        for class_data in classes:
+            class_node = await create_class_node(
+                session, 
+                class_data["class_name"], 
+                class_data["description"], 
+                class_data["docstring"], 
+                class_data["code"], 
+                file_path
+            )
+        for method_data in methods:
+            logger.info(f"Creating method node for {method_data['method_name']}")
+            # Create or update the method node
+            method_node = await create_method_node(
+                session, 
+                method_data["method_name"], 
+                method_data["description"], 
+                method_data["docstring"], 
+                method_data["code"], 
+                file_path
+            )
+        
+        for script_data in scripts:
+            logger.info(f"Creating script node for {script_data['script_name']}")
+            # Create or update the script node
+            script_node = await create_script_node(
+                session, 
+                script_data["script_name"], 
+                script_data["description"], 
+                script_data["code"], 
+                file_path
+            )
 
-        for class_data in state.get("classes", []):
-            class_node = await create_class_node(session, 
-                                            class_data["class_name"], 
-                                            class_data["description"], 
-                                            class_data["docstring"], 
-                                            class_data["code"], 
-                                            file_path)
-
-        for method_data in state.get("methods", []):
-            print(method_data)
-            await create_method_node(session, 
-                                    method_data["method_name"], 
-                                    method_data["description"], 
-                                    method_data["docstring"], 
-                                    method_data["code"], 
-                                    file_path)
         return 
     except Exception as e:
         logger.error(f"Error creating script/class/method relationships: {e}")
         raise
 
-# Main function to enrich the Neo4j knowledge graph
 async def enrich_kg(
-    repo_name: str,
-    file_path: str,
-    state: dict
+    repo_name: str, 
+    file_name: str, 
+    file_path: str, 
+    state: dict, 
+    dep_queue: list, 
+    dep_lock: Lock
 ):
     """Enrich the Neo4j knowledge graph with data from a code analysis state."""
     try:
@@ -282,25 +351,25 @@ async def enrich_kg(
 
         async with get_session() as session:
             logging.info("Update Repositor property ....")
-            await update_node_property(
+            await enrich_file_node(
                 session=session,
-                repo_name=repo_name,
-                file_path=file_path,
+                path=file_path,
+                name=file_name,
                 state=state
             )
 
             if need_analysis:
-                await create_dependency_relationships(
-                    session=session,
-                    repo_name=repo_name,
-                    state=state
-                )
                 
-                await create_script_class_method_relationships(
+                await enrich_script_class_method(
                     session=session,
-                    repo_name=repo_name,
                     file_path=file_path,
                     state=state.get("code_analysis", {})
+                )
+                await queue_dependency_relationships_safe(
+                    state=state,
+                    repo_name=repo_name,
+                    dep_queue=dep_queue,
+                    lock=dep_lock
                 )
                 logger.info("Successfully enriched the knowledge graph.")
             else:
@@ -310,54 +379,150 @@ async def enrich_kg(
         logger.error(f"Error during enrichment process: {e}")
         raise
 
+
+# --- Folder ingestion ---
+async def process_folder_node(node):
+    async with get_session() as session:
+        try:
+            await create_folder_node(
+                session,
+                name=node["name"],
+                path=node["path"],
+                parent_path=node["parent_path"]
+            )
+        except Exception as e:
+            logger.error(f"Error processing folder {node['path']}: {e}", exc_info=True)
+
+
+
+# --- File ingestion ---
+async def analyze_and_enrich(
+    full_path: str,
+    file_path: str,
+    file_name: str,
+    repo_name: str,
+    repo_base: str,
+    dependency_queue: list,
+    dep_lock: Lock
+):
+    state = await run_code_analysis_agent(file_path=full_path, repo_base=repo_base)
+
+    if not state or "code_summary" not in state or "code_analysis" not in state:
+        logger.warning(f"Analysis skipped for {file_path} due to missing data.")
+        return
+
+    await enrich_kg(
+        repo_name=repo_name,
+        file_name=file_name,
+        file_path=file_path,
+        state=state,
+        dep_queue=dependency_queue,
+        dep_lock=dep_lock
+    )
+
+async def process_file_node(
+    file_semaphore,
+    node,
+    repo_name: str,
+    repo_base: str,
+    updated_filter_result: dict,
+    dependency_queue: list,
+    dep_lock: Lock 
+):
+    async with get_session() as session:
+        async with file_semaphore:
+            file_path = node["path"]
+            full_path = os.path.join(config.REPO_DIRS, file_path)
+
+            try:
+                file_content = await extract_file_content(full_path)
+
+                await create_file_node(
+                    session=session,
+                    name=node["name"],
+                    path=file_path,
+                    parent_path=node["parent_path"],
+                    file_content=file_content
+                )
+                # Run analysis only on useful files
+                if updated_filter_result.get(file_path) and file_content.strip():
+                    logger.info(f"Analyzing file: {file_path}")
+                    await analyze_and_enrich(
+                        full_path=full_path,
+                        file_path=file_path,
+                        file_name=node["name"],
+                        repo_name=repo_name,
+                        repo_base=repo_base,
+                        dependency_queue=dependency_queue,
+                        dep_lock=dep_lock
+                    )
+            except Exception as e:
+                logger.error(f"Error processing file {file_path}: {e}", exc_info=True)
+
+
 async def ingest_repo(cloned_repo: pygit2.Repository):
-    """
-    Given a cloned pygit2 Repository object, traverse its HEAD commit tree and ingest
-    the resulting structure into Neo4j.
-    """
+    """Ingest a Git repository into Neo4j with nodes, embeddings, and relationships."""
+    dependency_queue = []
+    dep_lock = Lock()
+    file_semaphore = Semaphore(10)  # Limit concurrency for file processing
 
     try:
+        repo_path = cloned_repo.workdir
+        repo_name = os.path.basename(repo_path.rstrip(os.sep))
+        repo_base = os.path.join(config.REPO_DIRS, repo_name)
         async with get_session() as session:
-            repo_path = cloned_repo.workdir
-            repo_name = os.path.basename(repo_path.rstrip(os.sep))
+            # --- Repository node ---
             project_tree = get_project_tree_string(repo_path)
-            repo_node = await create_repository_node(session, repo_name,project_tree)
-            logger.info(f"Created repository node for '{repo_name}'")
-            head_commit = cloned_repo[cloned_repo.head.target]
-            nodes = await asyncio.to_thread(traverse_tree_sync, cloned_repo, head_commit.tree, repo_path, repo_path, repo_name)
-            logger.info(f"Retrieved {len(nodes)} nodes from repository '{repo_name}'.")
-            filter_result = await run_filter_agent(project_tree)
-            logger.info(f"Filter result: {filter_result}")
-            updated_filter_result = {
-                f"{repo_name}/{key}": value for key, value in filter_result.items() if value is True
-            }
-            logger.info(f"Updated filter result with repo name: {updated_filter_result}")
+            await create_repository_node(session, repo_name, project_tree)
+            logger.info(f"Repository node created: {repo_name}")
 
+        # --- Git tree traversal ---
+        head_commit = cloned_repo[cloned_repo.head.target]
+        nodes = await asyncio.to_thread(
+            traverse_tree_sync,
+            cloned_repo, head_commit.tree, repo_path, repo_path, repo_name
+        )
+        logger.info(f"Discovered {len(nodes)} nodes in repository.")
 
-            for node in nodes:
-                if node["type"] == "folder":
-                    await create_folder_node(session, node["name"], node["path"], repo_name)
-                elif node["type"] == "file":
-                    file_content = await extract_file_content(os.path.join(config.REPO_DIRS,node["path"]))
-                    await create_file_node(session, node["name"], node["path"], node["extension"],repo_name, file_content)
-                    
-                    if updated_filter_result.get(node["path"]):
-                        logger.info(f"File {node['path']} is useful. Proceeding with code analysis.")
+        # --- Folder ingestion ---
+        folder_tasks = [
+            asyncio.create_task(process_folder_node(node=node))
+            for node in nodes if node["type"] == "folder"
+        ]
+        await asyncio.gather(*folder_tasks)
+        logger.info(f"Created {len(folder_tasks)} folder nodes.")
 
-                        state = await run_code_analysis_agent(
-                            file_path=os.path.join(config.REPO_DIRS, node["path"]),
-                            repo_base=os.path.join(config.REPO_DIRS, repo_name)
-                        )
+        # # --- Filter agent ---
+        filter_result = await run_filter_agent(project_tree)
+        updated_filter_result = {
+            f"{repo_name}/{key}": val
+            for key, val in filter_result.items()
+            if val is True
+        }
+        # # --- File ingestion ---
+        file_tasks = [
+            asyncio.create_task(process_file_node(
+                file_semaphore,
+                node,
+                repo_name,
+                repo_base,
+                updated_filter_result,
+                dependency_queue,
+                dep_lock
+            ))
+            for node in nodes if node["type"] == "file"
+        ]
+        await asyncio.gather(*file_tasks)
 
-                        # Enrich the knowledge graph with code analysis results
-                        await enrich_kg(
-                            repo_name=repo_name,
-                            file_path=node["path"],
-                            state=state
-                        )
-            logger.info(f"Ingestion of repository '{repo_name}' complete.")
+        # # --- Final relationship setup ---
+        await create_containment_relationships_cypher()
+        await run_dependency_relationships_batch(dependency_queue)
+
+        logger.info(f"Created {len(dependency_queue)} dependency relationships.")
+        logger.info(f"Repository '{repo_name}' ingestion complete.")
 
     except Exception as e:
-        logger.error(f"Error ingesting repository: {e}")
+        logger.error(f"Repository ingestion failed: {e}", exc_info=True)
+
     finally:
         await close_driver()
