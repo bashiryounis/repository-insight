@@ -10,6 +10,7 @@ from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from src.core.logger_config import setup_logging
 from src.service.api import router as repo_router
+from src.core.index import setup_all_indexes
 
 setup_logging()
 logger=logging.getLogger(__name__)
@@ -46,6 +47,16 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
 )
+
+@app.on_event("startup")
+async def initialize_indexes():
+    try:
+        logger.info("Running vector index setup on startup...")
+        await setup_all_indexes()
+        logger.info("Vector index setup complete.")
+    except Exception as e:
+        logger.error(f"Error during index setup: {e}")
+
 
 # Redirect root path to API documentation
 @app.get("/", include_in_schema=False)
