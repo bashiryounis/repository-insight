@@ -6,7 +6,7 @@ authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 fastapi = "^0.115.12"
 pydantic = "^2.10.6"
 uvicorn = "^0.34.0"
@@ -34,6 +34,11 @@ neo4j = "^5.28.1"
 llama-index-llms-google-genai = "^0.1.7"
 json-repair = "^0.40.0"
 llama-index-graph-stores-neo4j = "^0.4.6"
+fastembed = "^0.6.0"
+llama-index-embeddings-gemini = "^0.3.2"
+llama-index-vector-stores-neo4jvector = "^0.3.0"
+llama-index-embeddings-fastembed = "^0.3.1"
+setuptools = "^78.1.0"
 
 
 [build-system]
