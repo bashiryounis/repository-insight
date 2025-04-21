@@ -6,7 +6,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: app
+    container_name: repo-insights
     command: "./dev_start.sh"
     ports:
       - "8005:8000"
