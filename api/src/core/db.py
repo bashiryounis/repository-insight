@@ -20,7 +20,3 @@ async def close_driver():
     """Closes the global Neo4j driver."""
     await driver.close()
 
-
-embed_dim = 1536
-neo4j_vector = Neo4jVectorStore(config.NEO4J_USERNAME, config.NEO4J_PASSWORD,config.NEO4J_URI, embed_dim)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
