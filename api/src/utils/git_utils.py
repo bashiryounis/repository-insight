@@ -3,43 +3,44 @@ import pygit2
 import asyncio
 
 def traverse_tree_sync(repo, tree, parent_full_path, base_path, repo_name):
-    """Synchronously traverse the pygit2 tree and return a list of node info dictionaries, with repo name prepended."""
+    """
+    Synchronously traverse the pygit2 tree and return structured file/folder nodes.
+    Paths and parent paths are normalized and namespaced with the repo name.
+    """
     nodes = []
     for entry in tree:
         full_path = os.path.join(parent_full_path, entry.name)
         relative_path = os.path.relpath(full_path, base_path)
-        relative_path_with_repo = os.path.join(repo_name, relative_path)  # Include repo name in path
+        path = os.path.normpath(os.path.join(repo_name, relative_path))
+
         relative_parent = os.path.relpath(parent_full_path, base_path)
-        relative_parent_with_repo = os.path.join(repo_name, relative_parent)  # Include repo name in parent path
-        
-        if entry.filemode == pygit2.GIT_FILEMODE_TREE and entry.name == repo_name:
+        if relative_parent in (".", ""):
+            parent_path = repo_name  # root folder connects to the repo
+        else:
+            parent_path = os.path.normpath(os.path.join(repo_name, relative_parent))
+
+        if entry.filemode == pygit2.GIT_FILEMODE_TREE:
+            # Folder
             nodes.append({
                 "type": "folder",
                 "name": entry.name,
-                "path": relative_path_with_repo,
-                "parent_path": None,  # Root folder doesn't have a parent, it connects to the repository node
-            })
-        elif entry.filemode == pygit2.GIT_FILEMODE_TREE:
-            # Regular folder handling
-            nodes.append({
-                "type": "folder",
-                "name": entry.name,
-                "path": relative_path_with_repo,
-                "parent_path": relative_parent_with_repo,
+                "path": path,
+                "parent_path": parent_path,
             })
             subtree = repo[entry.id]
             nodes.extend(traverse_tree_sync(repo, subtree, full_path, base_path, repo_name))
+
         else:
-            _, ext = os.path.splitext(entry.name)      
-            if not ext:
-                ext = entry.name  
-            
+            # File
+            _, ext = os.path.splitext(entry.name)
+            ext = ext.lstrip('.') if ext else entry.name
+
             nodes.append({
                 "type": "file",
                 "name": entry.name,
-                "path": relative_path_with_repo,
-                "extension": ext.lstrip('.'),  # Strip leading '.' if present
-                "parent_path": relative_parent_with_repo
+                "path": path,
+                "extension": ext,
+                "parent_path": parent_path,
             })
     return nodes
 
