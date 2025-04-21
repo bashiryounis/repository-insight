@@ -10,9 +10,7 @@ from src.agent.agents import (
     parser_code_agent,
     filter_agent
 )
-from src.agent.utils import extract_file_content, get_project_tree_string
-from llama_index.core.workflow import Context
-
+from src.agent.utils import extract_file_content, get_project_tree_string, extract_tool_output_structures
 
 
 # Initialize the workflow with an initial state.
@@ -52,14 +50,12 @@ async def run_code_analysis_agent(file_path: str, repo_base:str):
             "-------------\n"
             f"{file_content}"
         )
-        ctx = Context(parser_code_agent)
         # If summary is True, continue with the other agents (complexity, dependency, parser)
         complexity_result, dependency_result ,parser_code_result = await asyncio.gather(
             complexity_agent.run(file_content),
             dependency_agent.run(combined_content),
-            parser_code_agent.run(file_content,ctx=ctx)
+            parser_code_agent.run(file_content)
         )
-
 
         # Aggregate the results into the state dictionary
         state = {
@@ -67,7 +63,7 @@ async def run_code_analysis_agent(file_path: str, repo_base:str):
             "code_summary":summary_result,
             "complexity_analysis": complexity_result.response.content,
             "dependency_analysis":json_repair.loads(dependency_result.response.content),
-            "code_analysis": await ctx.get("state"),
+            "code_analysis": extract_tool_output_structures(parser_code_result),
             "file_content":file_content,
         }
 
