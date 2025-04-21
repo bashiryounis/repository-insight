@@ -194,3 +194,39 @@ async def filter_tree_repository(
 
     await ctx.set("state", current_state)    
     return f"File '{file_path}' classified as {'useful' if is_useful else 'not useful'}"
+
+def extract_tool_output_structures(agent_output):
+    state = {
+        "classes": [],
+        "methods": [],
+        "scripts": []
+    }
+
+    for tool_call in agent_output.tool_calls:
+        tool_name = tool_call.tool_name
+        kwargs = tool_call.tool_kwargs
+
+        if tool_name == "extract_class_block":
+            state["classes"].append({
+                "class_name": kwargs.get("class_name"),
+                "description": kwargs.get("description"),
+                "docstring": kwargs.get("docstring"),
+                "code": kwargs.get("code")
+            })
+
+        elif tool_name == "extract_method_block":
+            state["methods"].append({
+                "method_name": kwargs.get("method_name"),
+                "description": kwargs.get("description"),
+                "docstring": kwargs.get("docstring", "N/A"),
+                "code": kwargs.get("code")
+            })
+
+        elif tool_name == "extract_script_block":
+            state["scripts"].append({
+                "script_name": kwargs.get("script_name"),
+                "description": kwargs.get("description"),
+                "code": kwargs.get("code")
+            })
+
+    return state
