@@ -119,7 +119,7 @@ async def setup_all_indexes():
             "content"
         ],
         config.FILE_LABEL: [
-            "name"
+            "name",
             "content",
             "description",
             {"summary": {"dim": 384}},
