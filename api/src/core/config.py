@@ -14,8 +14,11 @@ class Config(BaseSettings):
     REPO_LABEL:str = Field(default="Repository", env="REPO_LABEL")
     FOLDER_LABEL:str = Field(default="Folder", env="FOLDER_LABEL")
     FILE_LABEL:str = Field(default="File", env="FILE_LABEL")
-
+    CLASS_LABEL:str = Field(default="Class", env="CLASS_LABEL")
+    METHOD_LABEL:str = Field(default="Method", env="METHOD_LABEL")
+    SCRIPT_LABEL:str = Field(default="Script", env="SCRIPT_LABEL")
     GOOGLE_API_KEY:str = Field(env="GOOGLE_API_KEY")
+    EMBED_MODL:str = Field(default="models/embedding-001", env="EMBED_MODL")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

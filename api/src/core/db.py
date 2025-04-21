@@ -1,8 +1,6 @@
 import asyncio
 from neo4j import AsyncGraphDatabase
 from src.core.config import config
-from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext
 
 driver = AsyncGraphDatabase.driver(
     config.NEO4J_URI, 
