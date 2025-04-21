@@ -61,52 +61,68 @@ A list of dictionaries. Each dictionary should represent one dependency relation
     - 'external': `true` if the dependency is external, otherwise `false` (boolean).
     - 'description': A short description of how the dependency is used (string).
 """
-
-
 CODE_PARSER_PROMPT = """
-You are a code analysis agent. Your task is to analyze the provided code and EXECUTE THE APPROPRIATE FUNCTIONS to register each code element you find:
+You are a code analysis agent. Your job is to analyze the provided Python code and CALL THE APPROPRIATE FUNCTIONS to register only meaningful, implemented code elements.
 
-1. **Standalone Classes:** For EVERY standalone class you find (i.e., a class that is not nested inside another class or function):
-   - You MUST CALL the `extract_class_block` function with the class's docstring, description, name, and the class's complete code, including any methods and attributes defined within the class.
-   - This includes **all code related to the class**, such as methods, attributes, and any inner classes, if applicable.
+Follow these strict instructions:
 
-2. **Methods Inside Classes:** For EVERY method **inside a class**:
-   - You MUST CALL the `extract_method_block` function with the method's docstring, name, and code.
-   - Methods are always extracted within their corresponding class.
+---
 
-3. **Standalone Functions:** For EVERY standalone function (i.e., functions that are not part of any class):
-   - You MUST CALL the `extract_method_block` function with the function's code, description, and the function name.
-   - This applies to functions that are **not inside any class** (top-level functions, not methods).
+1. **Standalone Classes** (defined in the file, not imported or empty):
+   - Only process classes that are **defined and implemented** in the file — ignore import statements or class declarations without methods or logic.
+   - CALL the `extract_class_block` function with:
+     - `docstring`: The docstring of the class, or "N/A" if missing.
+     - `class_name`: The name of the class.
+     - `description`: A human-readable summary of what the class does.
+     - `code`: The full implementation of the class including methods, attributes, and inner classes.
 
-4. **Standalone Scripts:** For EVERY script block that is **not part of a function or class** (global-level code, initialization code, script sections):
-   - You MUST CALL the `extract_script_block` function with the script's code and a description.
-   - This applies to **any code that exists outside of a function or class**.
+2. **Standalone Functions** (top-level functions not inside classes):
+   - For each clearly defined top-level function, CALL `extract_method_block` with:
+     - `docstring`: The function’s docstring, or "N/A".
+     - `method_name`: The function name.
+     - `description`: A clear summary of what the function does.
+     - `code`: The complete function definition.
 
-For each extracted element (class, function, or script), generate clear and concise description , ensuring that methods are nested within their corresponding classes, and script blocks are properly handled.
+3. **Top-Level Script Blocks** (any code outside classes/functions):
+   - For top-level logic like variable assignments, control flows, or `if __name__ == "__main__"`, CALL `extract_script_block` using:
+     - `script_name`: A brief title for the block (e.g., "main_script", "entrypoint", "initialization").
+     - `description`: What this script block is doing.
+     - `code`: The actual code block.
 
-Make sure to EXECUTE the appropriate function for each element:
-- `extract_class_block` for **standalone classes**, including all related code (methods, attributes, etc.).
-- `extract_method_block` for **methods** inside classes and **standalone functions**.
-- `extract_script_block` for **standalone script blocks** and **global code**.
+---
+
+**Important Rules:**
+- DO NOT extract classes that are imported or have no body/logic.
+- DO NOT extract functions or scripts that are trivial or clearly empty.
+- Use `"N/A"` for missing docstrings.
+- Always include meaningful `description` values that summarize the purpose of each code block.
 """
 
+
+
 FILTER_TREE_PROMPT = """
-You are a file classification agent. Your task is to classify files in a project repository based on their name, type, and location within the project structure. The goal is to help reduce the processing workload by identifying files that are useful for further analysis (e.g., code files) and those that are not useful (e.g., configuration files, documentation files, non-code files).
+You are a file classification agent working with a software project repository. Your task is to analyze the **project file tree** and determine which files are useful for further code analysis and which are not, based on their file name, type (extension), and path within the project.
 
-Please return a dictionary where:
-- The keys are the **file paths**.
-- The values are **True** for useful files and **False** for non-useful files.
+Your output must be a Python **dictionary** where:
+- Keys are full **file paths** (e.g., "src/main.py", "docs/manual.pdf").
+- Values are **True** if the file is useful for code analysis.
+- Values are **False** if the file is not useful and can be ignored.
 
-Useful files are those that are relevant for further processing and analysis, such as:
-- Code files (e.g., Python, JavaScript, TypeScript, etc.).
-- Configuration files that are required for processing the code (e.g., `.json`, `.yml`, `.env` if they are required).
+Useful files typically include:
+- Source code files (e.g., `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.rb`).
+- Build and configuration files (e.g., `Makefile`, `Dockerfile`, `.yaml`, `.yml`, `.json`, `.env`, `.toml`, `.ini`).
+- Documentation or metadata that describe the code (e.g., `README`, `requirements.txt`, `setup.py`).
 
-Non-useful files are those that are not required for further analysis, such as:
-- Documentation files (e.g., README.md).
-- Configuration files like Dockerfiles, YAML files used for deployment, or files that contain non-relevant data (e.g., `.pdf`, `.sh`, `.svg`).
-- Binary files or files that would introduce errors or are not part of the core logic of the project.
+Non-useful files include:
+- Media files (`.jpg`, `.png`, `.mp4`, `.svg`, `.gif`, `.ico`, etc.).
+- Binary and compiled files (`.exe`, `.bin`, `.so`, `.dll`, `.class`, `.o`, `.a`, etc.).
+- Database dumps and migrations (e.g., `.sql`, `.sqlite`, migration folders).
+- PDFs, archives, logs, or other static documentation (e.g., `.pdf`, `.zip`, `.log`, `.csv`, `.xlsx`).
+- Temporary or IDE-specific files and folders (e.g., `.DS_Store`, `.idea/`, `__pycache__/`, `node_modules/`, `venv/`).
 
-Return ONLY the dictionary with the following format:
+Your classification should help reduce unnecessary processing by filtering the file tree efficiently.
+
+Return **only** the resulting dictionary in the format:
 {
     "file_path_1": True,
     "file_path_2": False,
