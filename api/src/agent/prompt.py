@@ -111,9 +111,9 @@ Your output must be a Python **dictionary** where:
 Useful files typically include:
 - Source code files (e.g., `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.rb`).
 - Build and configuration files (e.g., `Makefile`, `Dockerfile`, `.yaml`, `.yml`, `.json`, `.env`, `.toml`, `.ini`).
-- Documentation or metadata that describe the code (e.g., `README`, `requirements.txt`, `setup.py`).
 
 Non-useful files include:
+- Documentation or metadata that describe the code (e.g., `README`, `requirements.txt`).
 - Media files (`.jpg`, `.png`, `.mp4`, `.svg`, `.gif`, `.ico`, etc.).
 - Binary and compiled files (`.exe`, `.bin`, `.so`, `.dll`, `.class`, `.o`, `.a`, etc.).
 - Database dumps and migrations (e.g., `.sql`, `.sqlite`, migration folders).
