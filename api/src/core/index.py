@@ -125,13 +125,13 @@ async def setup_all_indexes():
             {"summary": {"dim": 384}},
         ],
         config.CLASS_LABEL: [
-            "name"
+            "name",
             "content",
             "docstring",
             "description"
         ],
         config.METHOD_LABEL: [
-            "name"
+            "name",
             "content",
             "docstring",
             "description"
