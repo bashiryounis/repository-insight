@@ -1,18 +1,40 @@
 import os
 import logging
 import pygit2
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-from src.core.config import config
-from src.utils.llamaindex_ingest import ingest_repo as llamaindex_ingest_repo
-from src.utils.graph_utils import ingest_repo
 import asyncio
 import shutil
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from typing import List
+from src.core.config import config
+from src.core.db import get_session
+from src.utils.llamaindex_ingest import ingest_repo as llamaindex_ingest_repo
+from src.utils.graph_utils import ingest_repo
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 def clone_repository_sync(repo_url: str, destination: str):
     return pygit2.clone_repository(repo_url, destination)
+
+@router.get("/", response_model=List[str])
+async def get_repos():
+    """
+    Endpoint to get all repositories in the Neo4j database.
+    """
+    cypher = """
+    MATCH (r:Repository)
+    RETURN r.name AS name
+    ORDER BY name
+    """
+    try:
+        async with get_session() as neo_session:
+            result = await neo_session.run(cypher)
+            repos = [record["name"] async for record in result]
+        return repos
+    except Exception as e:
+        logger.error(f"Error fetching repositories: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch repositories from database.")
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def clone_repo(repo_url: str, background_tasks: BackgroundTasks):
