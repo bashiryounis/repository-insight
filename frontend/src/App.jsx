@@ -9,6 +9,8 @@ import { BiPlus, BiUser, BiSend, BiSolidUserCircle } from 'react-icons/bi';
 import { MdOutlineArrowLeft, MdOutlineArrowRight } from 'react-icons/md';
 import ReactMarkdown from 'react-markdown';
 
+const WS_URL = import.meta.env.VITE_WS_URL;
+
 function App() {
   const [text, setText] = useState('');
   const [messages, setMessages] = useState([]);
@@ -18,20 +20,50 @@ function App() {
   const [isShowSidebar, setIsShowSidebar] = useState(false);
   const scrollToLastItem = useRef(null);
   const ws = useRef(null);
+  const isEmpty = messages.length === 0 && !currentTitle;
 
   const connectWebSocket = useCallback(() => {
-    ws.current = new WebSocket('wss://your-websocket-endpoint');
+    ws.current = new WebSocket(WS_URL);
 
-    ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        { ...prev[prev.length - 1], content: prev[prev.length - 1].content + data.chunk }
-      ]);
+    ws.current.onopen = () => {
+      console.log('✅ WS connected');
+      setErrorText('');
     };
 
-    ws.current.onerror = (err) => {
-      setErrorText("WebSocket error: " + err.message);
+    ws.current.onmessage = (evt) => {
+      const data = JSON.parse(evt.data);
+      if (data.type === 'stream') {
+        // append token to the last assistant message
+        setMessages(prev => {
+          const copy = [...prev];
+          copy[copy.length - 1].content += data.payload;
+          return copy;
+        });
+      }
+
+      else if (data.type === 'final_result') {
+        // nothing to do here if you streamed continuously,
+        // or you could overwrite with the full answer:
+        // setMessages(prev => {
+        //   const copy = [...prev];
+        //   copy[copy.length - 1].content = data.payload;
+        //   return copy;
+        // });
+      }
+      else if (data.type === 'error') {
+        setErrorText(data.payload);
+      }
+    };
+    ws.current.onerror = () => {
+      console.error('⚠️ WS error');
+      setErrorText('WebSocket connection error');
+    };
+
+    ws.current.onclose = (evt) => {
+      console.log('🔒 WS closed', evt);
+      if (!evt.wasClean) {
+        setErrorText(`WebSocket closed unexpectedly (code=${evt.code})`);
+      }
     };
   }, []);
 
@@ -61,7 +93,7 @@ function App() {
     const assistantMessage = { role: 'assistant', content: '' };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    ws.current.send(JSON.stringify({ message: text }));
+    ws.current.send(JSON.stringify({ query: text }));
     setText('');
     setTimeout(() => scrollToLastItem.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth' }), 100);
     setIsResponseLoading(false);
@@ -75,6 +107,13 @@ function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Effect to scroll to the latest message when new content is streamed
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToLastItem.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   return (
     <div className='container'>
@@ -95,8 +134,8 @@ function App() {
         </div> */}
       </section>
 
-      <section className='main'>
-        {!currentTitle && (
+      <section className={`main ${isEmpty ? 'main--empty' : 'main--with-messages'}`}>
+        {!currentTitle && messages.length === 0 && (
           <div className='empty-chat-container'>
             {/* <img src='images/logo.svg' width={45} height={45} alt='Repository Insights' /> */}
             <h1>Repository Insight Service</h1>
@@ -114,15 +153,11 @@ function App() {
           <ul>
             {messages.map((chatMsg, idx) => (
               <li key={idx} ref={scrollToLastItem}>
-                {chatMsg.role === 'user' ? (
-                  <div><BiSolidUserCircle size={28.8} /></div>
-                ) : (
-                  <img src='images/logo.svg' alt='Assistant' />
-                )}
-                <div>
-                  <p className='role-title'>{chatMsg.role === 'user' ? 'You' : 'Assistant'}</p>
-                  <ReactMarkdown>{chatMsg.content}</ReactMarkdown>
-                </div>
+                {/* <div> */}
+                  <div className="message-content">
+                    <ReactMarkdown>{chatMsg.content}</ReactMarkdown>
+                  </div>
+                {/* </div> */}
               </li>
             ))}
           </ul>
