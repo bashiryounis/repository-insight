@@ -5,9 +5,10 @@ from starlette.responses import RedirectResponse
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.zipkin.json import ZipkinExporter
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.llamaindex import LlamaIndexInstrumentor
 from src.core.logger_config import setup_logging
 from src.service.api import router as repo_router
 from src.core.index import setup_all_indexes
@@ -23,7 +24,7 @@ app = FastAPI(
     """
     )
 # Set the tracer provider
-trace.set_tracer_provider(TracerProvider())
+trace.set_tracer_provider(TracerProvider(resource=Resource.create({SERVICE_NAME:"Repository Insight"})))
 tracer = trace.get_tracer(__name__)
 
 
@@ -37,7 +38,7 @@ trace.get_tracer_provider().add_span_processor(jaeger_span_processor)
 
 # Instrument the FastAPI app
 FastAPIInstrumentor.instrument_app(app, tracer_provider=trace.get_tracer_provider())
-
+LlamaIndexInstrumentor().instrument()
 
 # Configure CORS middleware to allow requests from any origin
 app.add_middleware(
@@ -66,4 +67,4 @@ def root_redirect():
     """
     return RedirectResponse(url="/docs/")
 
-app.include_router(repo_router, prefix="/repo", tags=["Repository Opreation"])
+app.include_router(repo_router, prefix="/api", tags=["Repository Opreation"])

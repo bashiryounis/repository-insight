@@ -2,7 +2,7 @@
 name = "repoinsight"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Younis Bashir <yzbashir98@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -39,6 +39,7 @@ llama-index-embeddings-gemini = "^0.3.2"
 llama-index-vector-stores-neo4jvector = "^0.3.0"
 llama-index-embeddings-fastembed = "^0.3.1"
 setuptools = "^78.1.0"
+opentelemetry-instrumentation-llamaindex = "^0.39.4"
 
 
 [build-system]
