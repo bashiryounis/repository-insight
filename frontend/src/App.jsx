@@ -148,9 +148,9 @@ function App() {
 
 
         <div className="project-selector">
-          <div className="project-label">Current Project</div>
-          <select className="project-dropdown" value="personal" readOnly>
-            <option value="personal">Personal Workspace</option>
+          <div className="project-label">Current Repository</div>
+          <select className="project-dropdown" value="image-detection" readOnly>
+            <option value="personal">delivery-ocr</option>
           </select>
         </div>
 
