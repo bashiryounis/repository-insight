@@ -220,7 +220,7 @@ function App() {
               </div>
               <div className="message-content">
                 <div className="message-text">
-                  <FormattedMessage content={msg.content} />
+                  <FormattedMessage text={msg.content} />
                 </div>
               </div>
             </div>
@@ -229,15 +229,18 @@ function App() {
 
         <div className="input-container">
           <div className="input-form">
-            <div className="input-header">
-              <button className="input-type-btn active">Text</button>
-              <button className="input-type-btn">URL</button>
-            </div>
+          <div className="input-header">
+            <button className="input-type-btn active">Text</button>
+            <button className="input-type-btn">
+              <BiCodeAlt className="inline mr-1" size={16} />
+            </button>
+          </div>
+
 
             <form className="input-area" onSubmit={submitHandler}>
               <textarea
                 className="input-textarea"
-                placeholder="Ask a coding question or paste code..."
+                placeholder="Ask a coding question or paste git clone URL..."
                 value={isResponseLoading ? 'Processing...' : text}
                 onChange={(e) => setText(e.target.value)}
                 readOnly={isResponseLoading}
