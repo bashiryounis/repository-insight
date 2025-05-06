@@ -18,6 +18,7 @@ class Config(BaseSettings):
     METHOD_LABEL:str = Field(default="Method", env="METHOD_LABEL")
     SCRIPT_LABEL:str = Field(default="Script", env="SCRIPT_LABEL")
     GOOGLE_API_KEY:str = Field(env="GOOGLE_API_KEY")
+    OPENAI_API_KEY:str = Field(env="OPENAI_API_KEY")
     EMBED_MODL:str = Field(default="models/embedding-001", env="EMBED_MODL")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
