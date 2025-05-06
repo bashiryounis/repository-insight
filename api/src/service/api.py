@@ -4,13 +4,12 @@ import pygit2
 import asyncio
 import shutil
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks,WebSocket, WebSocketDisconnect
-from llama_index.core.agent.workflow import AgentStream
 from typing import List
 from src.core.config import config
 from src.core.db import get_session
 from src.utils.llamaindex_ingest import ingest_repo as llamaindex_ingest_repo
 from src.utils.graph_utils import ingest_repo
-from src.insight_agent.core import insight_agent
+from src.agent.insight.core import stream_agent_response_to_websocket
 
 
 router = APIRouter()
@@ -106,24 +105,7 @@ async def query_endpoint(websocket: WebSocket):
                 })
                 continue
 
-            # 2) Kick off your workflow
-            handler = insight_agent.run(user_msg=query)
-
-            # 3) Stream partial tokens immediately
-            async for event in handler.stream_events():
-                if isinstance(event, AgentStream):
-                    token = event.delta
-                    if token.strip():
-                        await websocket.send_json({
-                            "type": "stream",
-                            "payload": token
-                        })
-
-            final = await handler
-            await websocket.send_json({
-                "type": "final_result",
-                "payload": str(final)
-            })
+            await stream_agent_response_to_websocket(websocket, user_query=query, target_agent="PlannerAgent")
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")
