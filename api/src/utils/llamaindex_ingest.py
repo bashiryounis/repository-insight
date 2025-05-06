@@ -1,8 +1,8 @@
 import os
 from src.core.config import config  
 from src.utils.git_utils import traverse_tree_sync
-from src.agent.base import run_code_analysis_agent , run_filter_agent
-from src.agent.utils import get_project_tree_string , extract_file_content
+from src.agent.ingest.base import run_code_analysis_agent , run_filter_agent
+from src.agent.ingest.tool import get_project_tree_string , extract_file_content
 import asyncio
 from asyncio import Semaphore, Lock
 import pygit2
