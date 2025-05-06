@@ -59,6 +59,7 @@ def format_search_results(records: List) -> str:
         desc = f": {r['description']}" if r.get("description") else ""
         content = r.get("content", "").rstrip()
         parts.append(
+            f"\n\n**Name:** {name}\n"
             f"**Description**{desc}\n\n"
             f"**Code:**\n```\n{content}\n```\n"
         )
