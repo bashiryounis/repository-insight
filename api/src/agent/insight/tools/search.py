@@ -29,12 +29,9 @@ async def search_graph(node_label: Literal["File", "Folder", "Class", "Method"],
             matched_folder_name = records[0]["name"]
             return await traverse_node(matched_folder_name)
     elif records:
-        return await format_search_results(records)
+        return format_search_results(records)
     else:
         return "No matching node found."
-
-
-
 
 async def similarity_search( node_label: Literal["File", "Class", "Method"], query: str):
     """
