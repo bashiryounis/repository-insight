@@ -42,8 +42,8 @@ html, body {
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --border-color: #374151;
-  --code-bg: #282c34;
-  --user-bg: #1f2937;
+  --code-bg: #0f172a;
+  --user-bg: #112240;
   --assistant-bg: #112240;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
   
@@ -386,64 +386,67 @@ body {
 }
 
 
+/* === Inline Code === */
 .inline-code {
-  display: inline;
-  background-color: #f3f4f6; /* light mode background */
-  color: #b91c1c;            /* red-700 */
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
-  font-family: monospace;
+  font-family: 'Fira Code', monospace;
   font-size: 0.875rem;
+  background-color: var(--code-bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  .inline-code {
-    background-color: #374151; /* dark mode bg */
-    color: #fca5a5;            /* red-300 */
-  }
+:root .inline-code {
+  color: #b91c1c; /* deep red for light mode */
+  background-color: #f3f4f6;
 }
 
+[data-theme="dark"] .inline-code {
+  background-color: #e5e7eb; /* light gray */
+  color: #1f2937;  
+}
+
+
+
+/* === Code Block Container === */
 .code-block {
+  background-color: var(--code-bg);
+  color: var(--text-primary);
+  border-radius: var(--border-radius, 8px);
+  padding: 16px;
+  margin: 12px 0;
   overflow-x: auto;
-  max-width: 100%;
+  transition: box-shadow 0.2s ease-in-out;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  position: relative;
+  counter-reset: line;
 }
 
+
+/* Remove inner background from <code> or <pre> */
+.code-block pre,
 .code-block code {
-    display: block;
-    padding-left: 2.5em;
-    position: relative;
-    }
-
-.code-block code::before {
-    counter-increment: line;
-    content: counter(line);
-    position: absolute;
-    left: 0;
-    width: 2em;
-    text-align: right;
-    color: var(--text-secondary);
-    padding-right: 0.5em;
-    user-select: none;
-    }
-.code-block {
-    background-color: var(--code-bg);
-    border-radius: var(--border-radius);
-    padding: 16px;
-    margin: 12px 0;
-    overflow-x: auto;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    transition: box-shadow 0.2s ease-in-out;
+  background: transparent !important;
+  color: inherit;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
+/* === Optional: Header Above Code Block === */
 .code-header {
   display: flex;
   justify-content: space-between;
   padding: 8px 16px;
   background-color: rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color, #374151);
   font-size: 13px;
-  color: var(--text-secondary);
-  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  color: var(--text-secondary, #9ca3af);
+  border-radius: var(--border-radius, 8px) var(--border-radius, 8px) 0 0;
   margin: -16px -16px 16px;
 }
 
@@ -459,7 +462,7 @@ body {
 .code-action {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #9ca3af);
   cursor: pointer;
   font-size: 13px;
   display: flex;
@@ -467,10 +470,20 @@ body {
   gap: 4px;
   transition: color 0.2s;
 }
-
 .code-action:hover {
-  color: var(--primary-color);
+  color: var(--primary-color, #60a5fa);
 }
+
+/* === Syntax Highlighting Classes (if used) === */
+.code-block .token.keyword   { color: var(--syntax-keyword); }
+.code-block .token.string    { color: var(--syntax-string); }
+.code-block .token.comment   { color: var(--syntax-comment); }
+.code-block .token.function  { color: var(--syntax-function); }
+.code-block .token.number    { color: var(--syntax-number); }
+.code-block .token.selector  { color: var(--syntax-selector); }
+.code-block .token.property  { color: var(--syntax-property); }
+
+
 
 .input-container {
   padding: 24px 24px; /* 👈 added horizontal padding */

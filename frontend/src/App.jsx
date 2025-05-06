@@ -21,6 +21,8 @@ function App() {
   const ws = useRef(null);
   const SERVICE_NAME = 'Repository Insight AI';
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const lastPayloadRef = useRef("");
+
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -45,13 +47,17 @@ function App() {
       if (data.type === 'stream') {
         setMessages((prev) => {
           const copy = [...prev];
-          copy[copy.length - 1].content += data.payload;
+          if (data.payload !== lastPayloadRef.current) {
+            copy[copy.length - 1].content += data.payload;
+            lastPayloadRef.current = data.payload;
+          }
           return copy;
         });
       } else if (data.type === 'error') {
         setErrorText(data.payload);
       }
     };
+    
 
     ws.current.onerror = () => {
       console.error('⚠️ WS error');
@@ -81,6 +87,7 @@ function App() {
   }, []);
 
   const submitHandler = (e) => {
+    lastPayloadRef.current = ""; // reset for new streaming
     e.preventDefault();
     if (!text) return;
 

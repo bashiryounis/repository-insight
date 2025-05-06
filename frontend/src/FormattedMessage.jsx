@@ -1,9 +1,12 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+// import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { BiCopy, BiCheck } from "react-icons/bi";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+SyntaxHighlighter.registerLanguage("python", python);
+
 
 const getTheme = () =>
   typeof document !== "undefined" &&
@@ -51,7 +54,6 @@ export default function FormattedMessage({ text = "" }) {
 }
 
 function MarkdownCode({ inline, className, children = [], ...props }) {
-  const isDark = getTheme();
   const rawLang = className?.replace("language-", "") || "";
   const language = languageMap[rawLang] || rawLang || "";
   const code = Array.isArray(children)
@@ -60,65 +62,60 @@ function MarkdownCode({ inline, className, children = [], ...props }) {
 
   const isProbablyCode = className?.startsWith("language-");
 
-  // ✅ Inline Code
   if (inline || (!isProbablyCode && !code.includes("\n"))) {
     return <code className="inline-code">{code}</code>;
   }
 
-  // ✅ Real Code Block
-  if (isProbablyCode) {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-      navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-    return (
-      <div className="code-block relative rounded-xl overflow-auto w-full max-w-full mb-6">
-        <div className="code-header">
-          <span className="code-language">{language}</span>
-          <div className="code-actions">
-            <button onClick={handleCopy} className="code-action">
-              {copied ? (
-                <>
-                  <BiCheck size={16} />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <BiCopy size={14} />
-                  <span>Copy</span>
-                </>
-              )}
-            </button>
-          </div>
+  return (
+    <div className="code-block relative rounded-xl overflow-auto w-full max-w-full mb-6">
+      <div className="code-header">
+        <span className="code-language">{language}</span>
+        <div className="code-actions">
+          <button onClick={handleCopy} className="code-action">
+            {copied ? (
+              <>
+                <BiCheck size={16} />
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <BiCopy size={14} />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
         </div>
-        <SyntaxHighlighter
-          language={language}
-          style={isDark ? oneDark : oneLight}
-          PreTag="div"
-          CodeTag="code"
-          customStyle={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            background: "transparent",
-            position: "relative",
-            minWidth: '100%',
-          }}
-          wrapLongLines
-          showLineNumbers={false}
-          {...props}
-        >
-          {code}
-        </SyntaxHighlighter>
       </div>
-    );
-  }
-
-  // ✅ Not actual code — likely markdown content, return raw
-  return <>{code}</>;
+      <SyntaxHighlighter
+        language={language}
+        // style={undefined} // ✅ Don't use Prism theme colors
+        useInlineStyles={false} 
+        className="code-block"
+        PreTag="div"
+        CodeTag="code"
+        customStyle={{
+          margin: 0,
+          padding: '0.75rem 1rem',
+          background: 'transparent',
+          minWidth: '100%',
+        }}
+        wrapLongLines
+        showLineNumbers={false}
+        {...props}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
 }
+
 
 function Table({ children }) {
   return (
