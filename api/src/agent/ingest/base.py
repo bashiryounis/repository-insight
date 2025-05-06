@@ -2,7 +2,7 @@ import asyncio
 import json_repair
 import logging
 from llama_index.core.agent.workflow import AgentWorkflow
-from src.agent.agents import (
+from src.agent.ingest.agents import (
     dependency_agent,
     summary_agent,
     description_agent,
@@ -10,7 +10,7 @@ from src.agent.agents import (
     parser_code_agent,
     filter_agent
 )
-from src.agent.utils import extract_file_content, get_project_tree_string, extract_tool_output_structures
+from api.src.agent.ingest.tool import extract_file_content, get_project_tree_string, extract_tool_output_structures
 
 
 # Initialize the workflow with an initial state.

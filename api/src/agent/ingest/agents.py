@@ -1,5 +1,5 @@
 from llama_index.core.agent.workflow import FunctionAgent, AgentWorkflow
-from src.agent.utils import (
+from src.agent.ingest.tool import (
     generate_file_description,
     generate_code_summary,
     analyze_complexity,
@@ -9,7 +9,7 @@ from src.agent.utils import (
     extract_script_block,
     filter_tree_repository
     )
-from src.agent.prompt import (
+from src.agent.ingest.prompt import (
     CODE_DESCRIPTION_PROMPT,
     CODE_SUMMARY_PROMPT,
     CODE_COMPLIXTY_PROMPT,
