@@ -8,7 +8,7 @@ from typing import List
 from src.core.config import config
 from src.core.db import get_session
 from src.utils.llamaindex_ingest import ingest_repo as llamaindex_ingest_repo
-from src.utils.graph_utils import ingest_repo
+from src.service.ingest.main_ingest import ingest_repo
 from src.agent.insight.core import stream_agent_response_to_websocket
 
 
