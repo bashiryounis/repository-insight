@@ -1,9 +1,9 @@
 import logging 
-from llama_index.core.agent.workflow import AgentOutput, AgentStream
+from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.agent.workflow import AgentWorkflow
 from collections import deque
 from src.agent.insight.agents import (
-    discovery_agent, planner_agent, relre_agent, research_agent, synthesis_agent
+    discovery_agent, planner_agent, relre_agent, research_agent
 )
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,9 @@ async def stream_agent_response_to_websocket(websocket, user_query: str, target_
             and event.current_agent_name != current_agent
         ):
                 current_agent = event.current_agent_name
-                print(f"\n{'='*50}")
-                print(f"🤖 Agent: {current_agent}")
-                print(f"{'='*50}\n")
+                logger.info(f"\n{'='*50}")
+                logger.info(f"🤖 Agent: {current_agent}")
+                logger.info(f"{'='*50}\n")
 
         if isinstance(event, AgentStream):
             if target_agent is None or current_agent == target_agent:
