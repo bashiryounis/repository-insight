@@ -1,5 +1,5 @@
 from typing import Literal 
-from src.utils.graph_utils import get_embedding
+from src.utils.helper import get_embedding
 from src.core.db import get_session
 from src.agent.insight.tools.utils import format_search_results
 from src.agent.insight.tools.neo4j_utils import traverse_node

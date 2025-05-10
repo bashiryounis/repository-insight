@@ -18,38 +18,34 @@ def build_nested_tree(records: List[dict]) -> dict:
         current["_meta"] = {
             "label": record["label"],
             "description": record.get("description"),
-            "content": record.get("content")
         }
     return root
 
 def format_nested_tree(tree: Dict[str, Any], prefix: str = "") -> str:
-    """Convert nested tree to formatted text."""
+    """Convert nested tree to formatted text with brief descriptions."""
     lines = []
-    entries = sorted(tree.items())
-    entries_meta = [(k, v) for k, v in entries if k != "_meta"]
-    total_entries = len(entries_meta)
+    entries = sorted((k, v) for k, v in tree.items() if k != "_meta")
+    total_entries = len(entries)
 
-    for idx, (name, subtree) in enumerate(entries_meta):
+    for idx, (name, subtree) in enumerate(entries):
         connector = "└── " if idx == total_entries - 1 else "├── "
         lines.append(f"{prefix}{connector}{name}")
 
-        # Add description and code if present
-        meta = subtree.get("_meta")
-        if meta:
-            desc = meta.get("description")
-            content = meta.get("content")
-            if desc:
-                lines.append(f"{prefix}{'    ' if idx == total_entries -1 else '│   '}📌 {desc}")
-            if content:
-                content_lines = content.strip().split("\n")
-                formatted_content = "\n".join(f"{prefix}{'    ' if idx == total_entries -1 else '│   '}    {line}" for line in content_lines)
-                lines.append(f"{prefix}{'    ' if idx == total_entries -1 else '│   '}💻 Code:\n{prefix}{'    ' if idx == total_entries -1 else '│   '}    ```\n{formatted_content}\n{prefix}{'    ' if idx == total_entries -1 else '│   '}    ```")
+        meta = subtree.get("_meta", {})
+        description = meta.get("description")
+        if description:
+            brief_desc = (description[:250] + "…") if len(description) > 100 else description
+            desc_prefix = "    " if idx == total_entries - 1 else "│   "
+            lines.append(f"{prefix}{desc_prefix}📌 {brief_desc}")
 
-        # Recursive call for children
+        # Recursive call for nested children
         extension = "    " if idx == total_entries - 1 else "│   "
-        lines.append(format_nested_tree(subtree, prefix + extension))
+        subtree_str = format_nested_tree(subtree, prefix + extension)
+        if subtree_str:
+            lines.append(subtree_str)
 
-    return "\n".join(filter(None, lines))
+    return "\n".join(lines)
+
 
 def format_search_results(records: List) -> str:
     """Formats list of nodes for LLM input."""
