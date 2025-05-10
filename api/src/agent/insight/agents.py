@@ -1,5 +1,5 @@
 from llama_index.core.agent.workflow import FunctionAgent
-from src.agent.llm import llm_gemini
+from src.agent.llm import llm_gemini, llm_gemini_pro
 from src.agent.insight.tools.utils import extract_node 
 from src.agent.insight.tools.neo4j_utils import (
    get_node_relationships_by_label,
@@ -14,7 +14,6 @@ from src.agent.insight.tools.search import (
 
 from src.agent.insight.prompt import (
    DISCOVERY_PROMPT, RELATION_PROMPT, RESEARCH_PROMPT, PLANNER_PROMPT,
-   SYNTHESIS_PROMPT
 )
 
 discovery_agent = FunctionAgent(
@@ -44,20 +43,10 @@ research_agent = FunctionAgent(
    can_handoff_to= ["PlannerAgent"] 
 )
 
-synthesis_agent = FunctionAgent(
-   name="SynthesisAgent",
-   description="Narrates the reasoning process by converting each planning note (plan, observation, final) into user-friendly Markdown explanations. Acts as the system's voice — progressively summarizing the PlannerAgent's steps and findings for the user, and handing of control back to the PlannerAgent after each response.",
-   tools=[],
-   llm=llm_gemini,
-   system_prompt=SYNTHESIS_PROMPT,
-   can_handoff_to=["PlannerAgent"]
-)
-
-
 planner_agent = FunctionAgent(
     name="PlannerAgent",
     description="Central coordinator that reasons through codebase queries using other agents, and emits structured plaintext notes.",
-    llm=llm_gemini,
+    llm=llm_gemini_pro,
     system_prompt=PLANNER_PROMPT,
     can_handoff_to=["DiscoveryAgent", "RelationResolverAgent", "ResearcherAgent"]
 )
