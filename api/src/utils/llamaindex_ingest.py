@@ -14,7 +14,8 @@ from src.core.config import config
 from src.utils.helper import (
     get_embedding, 
     generate_stable_id, 
-    run_dependency_relationships_batch, 
+)
+from src.service.ingest.relationship import (
     create_containment_relationships_cypher,
     run_dependency_relationships_batch,
     queue_dependency_relationships_safe
