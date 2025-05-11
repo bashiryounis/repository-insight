@@ -12,6 +12,8 @@ class Config(BaseSettings):
     NEO4J_USERNAME: str = Field(default="neo4j", env="NEO4J_USERNAME")
     NEO4J_PASSWORD: str = Field(default="password", env="NEO4J_PASSWORD")
     REPO_LABEL:str = Field(default="Repository", env="REPO_LABEL")
+    BRANCH_LABEL:str = Field(default="Branch", env="Branch_LABEL")
+    COMMIT_LABEL:str = Field(default="Commit", env="Commit_LABEL")
     FOLDER_LABEL:str = Field(default="Folder", env="FOLDER_LABEL")
     FILE_LABEL:str = Field(default="File", env="FILE_LABEL")
     CLASS_LABEL:str = Field(default="Class", env="CLASS_LABEL")
