@@ -3,6 +3,7 @@ import uuid
 from llama_index.core.settings import Settings
 import logging  
 import math
+import fnmatch
 
 logger=logging.getLogger(__name__)
 
@@ -24,9 +25,16 @@ def get_embedding(text: str) -> list[float]:
 
     return embedding
 
-def get_tree(root_path: str, prefix: str = "") -> str:
+def get_tree(root_path: str, prefix: str = "", ignore: list = None) -> str:
     """
-    Recursively generates a tree-like string for the given directory.
+    Recursively generates a tree-like string for the given directory,
+    skipping files/folders matching any pattern in `ignore`.
+
+    Args:
+        root_path (str): The root directory to walk.
+        prefix (str): Used for indentation (internal use).
+        ignore (list): List of directory or filename patterns to skip.
+
     Example output:
         ├── folder1
         │   ├── file1.py
@@ -34,12 +42,21 @@ def get_tree(root_path: str, prefix: str = "") -> str:
         └── folder2
             └── file3.py
     """
+    if ignore is None:
+        ignore = [".git", "__pycache__", "*.pyc", "*.pyo", ".DS_Store"]
+
     lines = []
     try:
         entries = os.listdir(root_path)
     except Exception as e:
         return f"Error reading directory {root_path}: {e}"
-    
+
+    # Filter out ignored entries
+    entries = [
+        entry for entry in entries
+        if not any(fnmatch.fnmatch(entry, pattern) for pattern in ignore)
+    ]
+
     entries.sort()
     entries_count = len(entries)
     for index, entry in enumerate(entries):
@@ -49,7 +66,7 @@ def get_tree(root_path: str, prefix: str = "") -> str:
         lines.append(prefix + connector + entry)
         if os.path.isdir(full_path):
             extension_prefix = prefix + ("    " if is_last else "│   ")
-            subtree = get_project_tree_string(full_path, extension_prefix)
+            subtree = get_tree(full_path, extension_prefix, ignore)
             if subtree:
                 lines.append(subtree)
     return "\n".join(lines)
