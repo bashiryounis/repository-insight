@@ -1,8 +1,8 @@
 import aiofiles 
 import os
 from llama_index.core.workflow import Context
-from llama_index.core.agent.workflow import AgentInput, AgentOutput, ToolCall, ToolCallResult, AgentStream
-# from src.agent.base import code_analysis_agent
+from src.utils.helper import get_tree
+
 # ----- TOOL FUNCTIONS -----
 
 async def extract_file_content(file_path: str) -> str:
@@ -23,40 +23,11 @@ async def extract_file_content(file_path: str) -> str:
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
-def get_project_tree_string(root_path: str, prefix: str = "") -> str:
-    """
-    Recursively generates a tree-like string for the given directory.
-    Example output:
-        ├── folder1
-        │   ├── file1.py
-        │   └── file2.py
-        └── folder2
-            └── file3.py
-    """
-    lines = []
-    try:
-        entries = os.listdir(root_path)
-    except Exception as e:
-        return f"Error reading directory {root_path}: {e}"
-    
-    entries.sort()
-    entries_count = len(entries)
-    for index, entry in enumerate(entries):
-        full_path = os.path.join(root_path, entry)
-        is_last = (index == entries_count - 1)
-        connector = "└── " if is_last else "├── "
-        lines.append(prefix + connector + entry)
-        if os.path.isdir(full_path):
-            extension_prefix = prefix + ("    " if is_last else "│   ")
-            subtree = get_project_tree_string(full_path, extension_prefix)
-            if subtree:
-                lines.append(subtree)
-    return "\n".join(lines)
 
 async def get_combined_file_content_with_tree(file_path: str, repo_base_path: str) -> str:
     """Combines the project tree (as textual context) with the content of a file."""
     file_content = await extract_file_content(file_path)    
-    project_tree = get_project_tree_string(repo_base_path)
+    project_tree = get_tree(repo_base_path)
     combined_content = (
         "Project Tree:\n"
         "-------------\n"

@@ -2,7 +2,7 @@ import os
 from src.core.config import config  
 from src.utils.git_utils import traverse_tree_sync
 from src.agent.ingest.base import run_code_analysis_agent , run_filter_agent
-from src.agent.ingest.tool import get_project_tree_string , extract_file_content
+from src.agent.ingest.tool import get_tree , extract_file_content
 import asyncio
 from asyncio import Semaphore, Lock
 import pygit2
@@ -277,7 +277,7 @@ async def ingest_repo(cloned_repo: pygit2.Repository):
         repo_path = cloned_repo.workdir
         repo_name = os.path.basename(repo_path.rstrip(os.sep))
 
-        project_tree = get_project_tree_string(repo_path)
+        project_tree = get_tree(repo_path)
         ingest_repo_node(name=repo_name, project_tree=project_tree)
 
         logger.info(f"Project tree for '{repo_name}':\n{project_tree}")

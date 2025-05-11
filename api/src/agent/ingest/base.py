@@ -6,7 +6,7 @@ from src.agent.ingest.agents import (
     parser_code_agent,
     filter_agent
 )
-from src.agent.ingest.tool import extract_file_content, get_project_tree_string, extract_tool_output_structures
+from src.agent.ingest.tool import extract_file_content, get_tree, extract_tool_output_structures
 from src.agent.ingest.utils import should_analyze, detect_language
 
 
@@ -70,7 +70,7 @@ async def run_code_analysis_agent(file_path: str, repo_base: str):
         state["skip_dependency_parser"] = skip_deps
 
         # Run only what’s needed
-        project_tree = get_project_tree_string(repo_base)
+        project_tree = get_tree(repo_base)
         combined_content = (
             "Project Tree:\n"
             "-------------\n"

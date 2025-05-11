@@ -6,7 +6,7 @@ import asyncio
 from asyncio import Semaphore, Lock
 from src.core.db import get_session, close_driver
 from src.core.config import config
-from src.agent.ingest.tool import get_project_tree_string
+from src.agent.ingest.tool import get_tree
 from src.service.ingest.node import create_repository_node
 from src.service.ingest.relationship import (
     create_containment_relationships_cypher,
@@ -32,7 +32,7 @@ async def ingest_repo(cloned_repo: pygit2.Repository):
         repo_base = os.path.join(config.REPO_DIRS, repo_name)
         async with get_session() as session:
             # --- Repository node ---
-            project_tree = get_project_tree_string(repo_path)
+            project_tree = get_tree(repo_path)
             await create_repository_node(session, repo_name, project_tree)
             logger.info(f"Repository node created: {repo_name}")
 
