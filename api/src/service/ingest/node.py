@@ -35,7 +35,6 @@ async def create_repository_node(session, node, username="admin"):
         {node['tree']}
         """
 
-    # Add embedding for the project tree
     await add_embeddings(
         session=session,
         node_label=config.REPO_LABEL,
@@ -44,20 +43,31 @@ async def create_repository_node(session, node, username="admin"):
     )
     return record["r"]
 
-async def create_folder_node(session, name, path, parent_path):
+async def create_folder_node(session, node):
     """Create or merge a folder node and connect it to its parent node (repository or folder)."""
-    node_id = generate_stable_id(f"{path}:{name}")
-    logger.info(f"Creating folder node: name={name}, path={path}, parent_path={parent_path}, node_id={node_id}")    
+    node_id = generate_stable_id(f"{node["path"]}:{node["name"]}")
+    logger.info(f"Creating folder node: name={node["name"]}, path={node["path"]}, parent_path={node["parent_path"]}, node_id={node_id}")    
 
     try:
         query = f"""
             MERGE (f:{config.FOLDER_LABEL} {{ node_id: $node_id }})
             SET f.name = $name, 
                 f.path = $path , 
-                f.parent_path = $parent_path 
+                f.parent_path = $parent_path, 
+                f.tree = $tree,
+                f.repository = $repository
             RETURN f
         """
-        result = await session.run(query, name=name, path=path, parent_path=parent_path, node_id=node_id)
+        result = await session.run(
+            query, 
+            node_id=node_id,
+            name=node["name"], 
+            path=node["path"], 
+            parent_path=node["parent_path"],
+            tree=node["tree"],
+            repository=node["repository"] 
+
+        )
         record = await result.single()
 
         await add_embeddings(
@@ -65,39 +75,42 @@ async def create_folder_node(session, name, path, parent_path):
             node_label=config.FOLDER_LABEL,
             node_id=node_id,
             fields={
-                "name":name,
-                "content": "N/A"
+                "name":node["name"],
+                "content": node["tree"],
             }
         )
-
         logger.info(f"Folder node created or merged: {record['f']}")
         return record["f"]
 
     except Exception as e:
-        logger.error(f"Error creating folder node {path}: {e}", exc_info=True)
+        logger.error(f"Error creating folder node {node["path"]}: {e}", exc_info=True)
         return None
 
-async def create_file_node(session, name, path, parent_path, file_content=None):
+async def create_file_node(session,node, file_content=None):
     """Create or merge a file node and connect it to its parent node (repository or folder)."""
-    logger.info(f"Running query to create file node with name: {name}, path: {path}, parent_path: {parent_path}")
-    node_id = generate_stable_id(f"{path}:{name}")
+    logger.info(f"Running query to create file node with name: {node["name"]}.")
+    node_id = generate_stable_id(f"{node["path"]}:{node["name"]}")
     # Set file content only if provided
     file_content = file_content.strip() if file_content and file_content.strip() else "File is empty"
 
     query = (f"""
         MERGE (f:{config.FILE_LABEL} {{ node_id: $node_id }})
         SET f.name = $name,
-            f.parent_path = $parent_path,
             f.content = $file_content,
-            f.path = $path
+            f.parent_path = $parent_path,
+            f.path = $path,
+            f.extension = $extension,
+            f.repository = $repository
         RETURN f
         """)
     result = await session.run(
         query, 
         node_id=node_id,
-        name=name, 
-        path=path, 
-        parent_path=parent_path, 
+        name=node["name"], 
+        path=node["path"],
+        extension=node["extension"],
+        repository=node["repository"], 
+        parent_path=node["parent_path"], 
         file_content=file_content
     )
     record = await result.single()
@@ -107,7 +120,7 @@ async def create_file_node(session, name, path, parent_path, file_content=None):
         node_label=config.FILE_LABEL,
         node_id=node_id,
         fields={
-            "name":name,
+            "name":node["name"],
             "content": file_content
         }
     )
