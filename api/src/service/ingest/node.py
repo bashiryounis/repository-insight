@@ -5,29 +5,42 @@ from src.service.ingest.embedding import add_embeddings
 
 logger = logging.getLogger(__name__)
 
-async def create_repository_node(session, name, project_tree, username="admin"):
+async def create_repository_node(session, node, username="admin"):
     """Create or merge a repository node in Neo4j."""
-    node_id = generate_stable_id(f"{name}:{username}")
+    node_id = generate_stable_id(f"{node["name"]}:{username}")
     query = (f"""
         MERGE (r:{config.REPO_LABEL} {{ node_id: $node_id }})
         SET r.name = $name,
-            r.project_tree = $project_tree 
+            r.remote_url = $remote_url,
+            r.default_branch = $default_branch,
+            r.description = $description,
+            r.tree = $tree
         RETURN r
     """)
     result = await session.run(
         query,
         node_id=node_id,
-        name=name,
-        project_tree=project_tree
+        name=node["name"],
+        remote_url=node["remote_url"],
+        default_branch=node["default_branch"],
+        description=node["description"],
+        tree=node["tree"],
     )
     record = await result.single()
+
+    embedding_content = f"""
+        Repository: {node['name']}
+        Description: {node.get('description', 'No description')}
+        Project Tree:
+        {node['tree']}
+        """
 
     # Add embedding for the project tree
     await add_embeddings(
         session=session,
         node_label=config.REPO_LABEL,
         node_id=node_id,
-        fields={"content": project_tree}
+        fields={"content": embedding_content},
     )
     return record["r"]
 
