@@ -118,6 +118,13 @@ async def setup_all_indexes():
             "name",
             "content"
         ],
+        config.BRANCH_LABEL: [
+            "content",
+        ],
+        config.COMMIT_LABEL: [
+            "content",
+
+        ],
         config.FILE_LABEL: [
             "name",
             "content",
