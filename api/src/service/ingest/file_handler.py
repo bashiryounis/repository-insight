@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 async def process_file_node(
     file_semaphore,
     node,
-    repo_name: str,
-    repo_base: str,
     updated_filter_result: dict,
     dependency_queue: list,
     dep_lock: Lock 
@@ -29,22 +27,20 @@ async def process_file_node(
 
                 await create_file_node(
                     session=session,
-                    name=node["name"],
-                    path=file_path,
-                    parent_path=node["parent_path"],
+                    node=node,
                     file_content=file_content
                 )
                 # Run analysis only on useful files
-                if updated_filter_result.get(file_path) and file_content.strip():
-                    logger.info(f"Analyzing file: {file_path}")
-                    await analyze_and_enrich(
-                        full_path=full_path,
-                        file_path=file_path,
-                        file_name=node["name"],
-                        repo_name=repo_name,
-                        repo_base=repo_base,
-                        dependency_queue=dependency_queue,
-                        dep_lock=dep_lock
-                    )
+                # if updated_filter_result.get(file_path) and file_content.strip():
+                #     logger.info(f"Analyzing file: {file_path}")
+                #     await analyze_and_enrich(
+                #         full_path=full_path,
+                #         file_path=file_path,
+                #         file_name=node["name"],
+                #         repo_name=repo_name,
+                #         repo_base=repo_base,
+                #         dependency_queue=dependency_queue,
+                #         dep_lock=dep_lock
+                #     )
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {e}", exc_info=True)
