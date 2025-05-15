@@ -1,7 +1,9 @@
 import logging
+from datetime import datetime
 from src.utils.helper import generate_stable_id
 from src.core.config import config
 from src.service.ingest.embedding import add_embeddings
+from src.service.ingest.relationship import create_file_diff_relationships
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,187 @@ async def create_repository_node(session, node, username="admin"):
     )
     return record["r"]
 
+async def create_branch_node(session, node):
+    """Create or merge a branch node and connect it to its parent repository."""
+    repo_name = node["repository"]
+    node_id = generate_stable_id(f"{node['name']}:{repo_name}")
+    logger.info(f"Creating branch node: name={node['name']}...")
+
+    try:
+        # Create branch node
+        query = f"""
+            MERGE (b:{config.BRANCH_LABEL} {{ node_id: $node_id }})
+            SET b.name = $name, 
+                b.is_head = $is_head,
+                b.is_default = $is_default,
+                b.is_remote_tracking = $is_remote_tracking,
+                b.upstream_name = $upstream_name,
+                b.remote_name = $remote_name,
+                b.latest_commit_id = $latest_commit_id,
+                b.commit_count = $commit_count,
+                b.repository = $repository,
+                b.tree = $tree
+            RETURN b
+        """
+        result = await session.run(
+            query, 
+            node_id=node_id,
+            name=node["name"], 
+            is_head=node["is_head"],
+            is_default=node["is_default"],
+            is_remote_tracking=node["is_remote_tracking"],
+            upstream_name=node["upstream_name"],
+            remote_name=node["remote_name"],
+            latest_commit_id=node["latest_commit_id"],
+            commit_count=node["commit_count"],
+            repository=repo_name,
+            tree = node["tree"]
+        )
+        record = await result.single()
+
+        # Create relationship to repository
+        await session.run(
+            f"""
+            MATCH (b:{config.BRANCH_LABEL} {{ node_id: $node_id }})
+            MATCH (r:{config.REPO_LABEL} {{ name: $repository }})
+            MERGE (r)-[:HAS_BRANCH]->(b)
+            """,
+            node_id=node_id,
+            repository=repo_name
+        )
+
+        if node.get("file_diff"):
+            await create_file_diff_relationships(session, node, node["file_diff"])
+
+        # Embedding
+        content = f"""\
+        Branch Name: {node['name']}
+        Repository: {repo_name}
+        Is Head: {node['is_head']}
+        Is Default: {node['is_default']}
+        Is Remote Tracking: {node['is_remote_tracking']}
+        Upstream Name: {node['upstream_name']}
+        Remote Name: {node['remote_name']}
+        Latest Commit ID: {node['latest_commit_id']}
+        Commit Count: {node['commit_count']}
+        """
+        await add_embeddings(
+            session=session,
+            node_label=config.BRANCH_LABEL,
+            node_id=node_id,
+            fields={"content": content}
+        )
+
+        logger.info(f"Branch node created and linked to repository: {record['b']}")
+        return record["b"]
+
+    except Exception as e:
+        logger.error(f"Error creating branch node {node['name']}: {e}", exc_info=True)
+        return None
+
+
+async def create_commit_node(session, node):
+    """
+    Create or merge a commit node, and relate it to:
+    - Branch (CONTAINS_COMMIT)
+    - Files (MODIFIED_FILE)
+    - Parent commits (PARENT)
+    """
+    commit_id = node["id"]
+    repo_name = node["repository"]
+    branch_name = node["branch"]
+
+    logger.info(f"Creating commit node: {commit_id}...")
+
+    try:
+        # Create the commit node
+        result = await session.run(
+            f"""
+            MERGE (c:{config.COMMIT_LABEL} {{ node_id: $node_id }})
+            SET c.name = $name,
+                c.message = $message,
+                c.author = $author,
+                c.email = $email,
+                c.timestamp = $timestamp,
+                c.repository = $repository,
+                c.branch = $branch
+            RETURN c
+            """,
+            node_id=commit_id,
+            name= node["name"],
+            message=node["message"],
+            author=node["author"],
+            email=node["email"],
+            timestamp=node["timestamp"],
+            repository=repo_name,
+            branch=branch_name
+        )
+        record = await result.single()
+
+        # Relate commit → branch
+        await session.run(
+            f"""
+            MATCH (c:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
+            MATCH (b:{config.BRANCH_LABEL} {{ name: $branch_name, repository: $repository }})
+            MERGE (b)-[:CONTAINS_COMMIT]->(c)
+            """,
+            commit_id=commit_id,
+            branch_name=branch_name,
+            repository=repo_name
+        )
+
+        # Relate commit → files
+        for f in node.get("touched_files", []):
+            print("#"*250)
+            print(f)
+            print("#"*250)
+            await session.run(
+                f"""
+                MATCH (c:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
+                MATCH (f:{config.FILE_LABEL} {{ path: $file_path, repository: $repository }})
+                MERGE (c)-[r:MODIFIED_FILE]->(f)
+                SET r.diff = $diff
+                """,
+                commit_id=commit_id,
+                file_path=f["file_path"],
+                repository=repo_name,
+                diff=f["diff"]
+            )
+
+        # Relate commit → parents
+        for parent_id in node.get("parents", []):
+            await session.run(
+                f"""
+                MATCH (c1:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
+                MATCH (c2:{config.COMMIT_LABEL} {{ node_id: $parent_id }})
+                MERGE (c1)-[:PARENT]->(c2)
+                """,
+                commit_id=commit_id,
+                parent_id=parent_id
+            )
+
+        # Embedding content
+        content = f"""\
+        Commit Message: {node['message']}
+        Author: {node['author']} <{node['email']}>
+        Branch: {branch_name}
+        Timestamp: {datetime.utcfromtimestamp(node['timestamp']).isoformat()}
+        """
+
+        await add_embeddings(
+            session=session,
+            node_label=config.COMMIT_LABEL,
+            node_id=commit_id,
+            fields={"content": content}
+        )
+
+        logger.info(f"Commit node created and linked: {record['c']}")
+        return record["c"]
+
+    except Exception as e:
+        logger.error(f"Error creating commit node {commit_id}: {e}", exc_info=True)
+        return None
+    
 async def create_folder_node(session, node):
     """Create or merge a folder node and connect it to its parent node (repository or folder)."""
     node_id = generate_stable_id(f"{node["path"]}:{node["name"]}")
