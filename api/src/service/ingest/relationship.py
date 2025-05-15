@@ -2,6 +2,8 @@ import os
 import logging 
 from asyncio import Lock
 from src.core.db import get_session
+from src.core.config import config
+from src.utils.helper import generate_stable_id
 
 
 logger = logging.getLogger(__name__)
@@ -94,3 +96,46 @@ async def run_dependency_relationships_batch(dep_queue: list):
             logger.info(f"Created {len(dep_queue)} RELATED_TO relationships.")
     except Exception as e:
         logger.error(f"Error creating dependency relationships: {e}")
+
+
+async def create_file_diff_relationships(session, branch_node, file_diff):
+    """
+    For a given branch, create ADDED_FILE, REMOVED_FILE, and MODIFIED_FILE relationships
+    to the affected file nodes.
+    """
+    branch_id = generate_stable_id(f"{branch_node['name']}:{branch_node['repository']}")
+    
+    for path in file_diff.get("added", []):
+        await session.run(
+            f"""
+            MATCH (b:{config.BRANCH_LABEL} {{ node_id: $branch_id }})
+            MATCH (f:{config.FILE_LABEL} {{ path: $path }})
+            MERGE (b)-[:ADDED_FILE]->(f)
+            """,
+            branch_id=branch_id,
+            path=path
+        )
+
+    for path in file_diff.get("removed", []):
+        await session.run(
+            f"""
+            MATCH (b:{config.BRANCH_LABEL} {{ node_id: $branch_id }})
+            MATCH (f:{config.FILE_LABEL} {{ path: $path }})
+            MERGE (b)-[:REMOVED_FILE]->(f)
+            """,
+            branch_id=branch_id,
+            path=path
+        )
+
+    for item in file_diff.get("modified", []):
+        await session.run(
+            f"""
+            MATCH (b:{config.BRANCH_LABEL} {{ node_id: $branch_id }})
+            MATCH (f:{config.FILE_LABEL} {{ path: $path }})
+            MERGE (b)-[r:MODIFIED_FILE]->(f)
+            SET r.diff = $diff
+            """,
+            branch_id=branch_id,
+            path=item["file_path"],
+            diff=item["diff"]
+        )
