@@ -1,7 +1,6 @@
 import logging 
 import math 
 import uuid
-from src.utils.helper import get_embedding
 
 logger=logging.getLogger(__name__)
 
@@ -13,6 +12,8 @@ async def add_embeddings(
     fields: dict,
 ):
     """Embeds the given content and stores it on the node with given node_id."""
+    from src.utils.helper import get_embedding
+
     for field_name, content in fields.items():
         if not content:
             continue
