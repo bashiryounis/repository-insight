@@ -3,7 +3,6 @@ from datetime import datetime
 from src.utils.helper import generate_stable_id
 from src.core.config import config
 from src.service.ingest.embedding import add_embeddings
-from src.service.ingest.relationship import create_file_diff_relationships
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +94,7 @@ async def create_branch_node(session, node):
         )
 
         if node.get("file_diff"):
+            from src.service.ingest.relationship import create_file_diff_relationships
             await create_file_diff_relationships(session, node, node["file_diff"])
 
         # Embedding
