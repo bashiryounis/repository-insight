@@ -1,27 +1,25 @@
 import os
 import uuid 
-from llama_index.core.settings import Settings
 import logging  
-import math
-import fnmatch
 
 logger=logging.getLogger(__name__)
+
+def clone_repository_sync(repo_url: str, destination: str):
+    import pygit2
+    return pygit2.clone_repository(repo_url, destination)
 
 def generate_stable_id(identifier: str) -> str:
     """Generate a UUID5 based on a file path (stable across runs)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, identifier))
 
 def get_embedding(text: str) -> list[float]:
+    from llama_index.core.settings import Settings
     if not text or not text.strip():
         return []
 
     embedding = Settings.embed_model.get_text_embedding(text)
     if not isinstance(embedding, list):
         embedding = embedding.tolist()
-
-    if not all(isinstance(x, (float, int)) and math.isfinite(x) for x in embedding):
-        logger.warning("Embedding contains non-finite values. Skipping embedding.")
-        return []
 
     return embedding
 
@@ -42,6 +40,8 @@ def get_tree(root_path: str, prefix: str = "", ignore: list = None) -> str:
         └── folder2
             └── file3.py
     """
+    import fnmatch
+
     if ignore is None:
         ignore = [".git", "__pycache__", "*.pyc", "*.pyo", ".DS_Store"]
 
