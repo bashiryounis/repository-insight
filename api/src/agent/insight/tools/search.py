@@ -1,5 +1,4 @@
 from typing import Literal 
-from src.utils.helper import get_embedding
 from src.core.db import get_session
 from src.agent.insight.tools.utils import format_search_results
 from src.agent.insight.tools.neo4j_utils import traverse_node
@@ -7,6 +6,7 @@ from src.agent.insight.tools.neo4j_utils import traverse_node
 async def search_graph(node_label: Literal["File", "Folder", "Class", "Method"], node_name: str ) -> str :
     """Usefull to search for spacific node in Graph databse"""
     top_k: int = 5
+    from src.utils.helper import get_embedding
     name_embedding = get_embedding(node_name)  
     
 
@@ -41,6 +41,7 @@ async def similarity_search( node_label: Literal["File", "Class", "Method"], que
     Returns the top_k most relevant nodes and their scores.
     """
     top_k=5 
+    from src.utils.helper import get_embedding
     embedding = get_embedding(query) # If get_embedding is sync and blocking, this is a problem
 
 
