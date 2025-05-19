@@ -1,11 +1,7 @@
 import logging
-from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from src.core.config import config
-from llama_index.core.settings import Settings
 
 logger = logging.getLogger(__name__)
-Settings.embed_model = FastEmbedEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 # ---------------------------------#
 #   Setup index for LlamaIndex     #
@@ -16,7 +12,9 @@ def get_vector_store(
         embedd_property: str, 
         text_property: str = "text",
         dim: int = 1536,
-    ) -> Neo4jVectorStore:
+    ):
+    from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
+
     return Neo4jVectorStore(
         url=config.NEO4J_URI,
         username=config.NEO4J_USERNAME,
@@ -32,7 +30,8 @@ def get_vector_store(
 
 _vector_store_cache = {}
 
-def get_index_for_label_field(label: str, field: str = None) -> Neo4jVectorStore:
+def get_index_for_label_field(label: str, field: str = None):
+    from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
     key = f"{label}:{field}"
     if key in _vector_store_cache:
         return _vector_store_cache[key]
