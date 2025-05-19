@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -22,6 +21,8 @@ class Config(BaseSettings):
     GOOGLE_API_KEY:str = Field(env="GOOGLE_API_KEY")
     OPENAI_API_KEY:str = Field(env="OPENAI_API_KEY")
     EMBED_MODL:str = Field(default="models/embedding-001", env="EMBED_MODL")
+
+    APP_ENV: str = Field(default="dev", env="APP_ENV")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
