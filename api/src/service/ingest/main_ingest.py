@@ -5,15 +5,15 @@ import pygit2
 import asyncio
 from asyncio import Semaphore, Lock
 from src.core.db import get_session, close_driver
-from src.core.config import config
-from src.agent.ingest.tool import get_tree
-from src.service.ingest.node import create_repository_node, create_folder_node, create_branch_node, create_commit_node
+from src.service.ingest.node import (
+    create_repository_node, create_folder_node, create_branch_node, create_commit_node
+)
 from src.service.ingest.relationship import (
     create_containment_relationships_cypher,
     run_dependency_relationships_batch,
 )
 from src.service.ingest.file_handler import process_file_node
-from src.agent.ingest.base import run_filter_agent
+# from src.agent.ingest.base import run_filter_agent
 from src.utils.git_utils import traverse_tree_sync
 from src.service.ingest.git_repo_parser import GitRepoParser
 
@@ -32,6 +32,11 @@ async def ingest_repo(cloned_repo: pygit2.Repository):
          # --- Parse repo structure using GitRepoParser ---
         parser = GitRepoParser(repo_path)
         nodes = parser.get_nodes()
+        print("#"*125)
+        print(nodes["branches"])
+        print("#"*125)
+        print("#"*125)
+        return 
         
         async with get_session() as session:
             await create_repository_node(

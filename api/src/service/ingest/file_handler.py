@@ -4,7 +4,6 @@ import logging
 from src.core.config import config
 from src.core.db import get_session
 from src.service.ingest.node import create_file_node
-from src.service.ingest.enrichment import analyze_and_enrich
 from src.agent.ingest.tool import extract_file_content
 
 
@@ -33,6 +32,8 @@ async def process_file_node(
                 # Run analysis only on useful files
                 # if updated_filter_result.get(file_path) and file_content.strip():
                 #     logger.info(f"Analyzing file: {file_path}")
+                # from src.service.ingest.enrichment import analyze_and_enrich
+
                 #     await analyze_and_enrich(
                 #         full_path=full_path,
                 #         file_path=file_path,

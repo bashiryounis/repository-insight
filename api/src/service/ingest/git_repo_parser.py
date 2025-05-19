@@ -1,5 +1,4 @@
 import os
-import pygit2
 import fnmatch
 import logging
 from src.utils.helper import get_tree
@@ -7,6 +6,8 @@ from src.utils.helper import get_tree
 logger = logging.getLogger(__name__)
 
 class GitRepoParser:
+    import pygit2
+    
     def __init__(self, repo_path: str):
         self.repo_path = repo_path
         self.repo = pygit2.Repository(repo_path)
@@ -168,9 +169,16 @@ class GitRepoParser:
         repo_name = self.nodes["metadata"].get("name", "unknown")
         default_branch = self.nodes["metadata"].get("default_branch")
 
-        for branch_name in self.repo.branches.local:
+        # print("--"*150)
+        print("--"*150)
+        
+        # logger.info("Listing local branches: %s", list(self.repo.branches.local))
+        logger.info("Listing remote branches: %s", list(self.repo.branches.remote))
+
+
+        for remote_branch in self.repo.branches.remote:
             try:
-                branch_ref = self.repo.branches.local.get(branch_name)
+                branch_ref = self.repo.branches.local.get(remote_branch)
                 if not branch_ref:
                     continue
 
@@ -179,7 +187,7 @@ class GitRepoParser:
                 try:
                     branch_tree_string = self._get_tree_from_commit(branch_ref.target)
                 except Exception as e:
-                    logger.warning(f"Failed to extract tree for branch '{branch_name}': {e}")
+                    logger.warning(f"Failed to extract tree for branch '{remote_branch}': {e}")
                     branch_tree_string = ""
 
                 # Count commits
@@ -187,16 +195,16 @@ class GitRepoParser:
 
                 # Diff with default branch (skip if same)
                 diff_file = {}
-                if default_branch and branch_name != default_branch:
-                    diff_file = self.diff_files_between_branches(self.repo, default_branch, branch_name)
+                if default_branch and remote_branch != default_branch:
+                    diff_file = self.diff_files_between_branches(self.repo, default_branch, remote_branch)
 
                 branch_dicts.append({
-                    "name": branch_name,
+                    "name": remote_branch,
                     "is_head": branch_ref.is_head(),
-                    "is_default": branch_ref.is_head(),
-                    "is_remote_tracking": bool(getattr(branch_ref, "upstream", None)),
-                    "upstream_name": getattr(getattr(branch_ref, "upstream", None), "name", None),
-                    "remote_name": getattr(getattr(branch_ref, "upstream", None), "remote_name", None),
+                    "is_default": remote_branch == default_branch,
+                    "is_remote_tracking": True,
+                    "upstream_name": None,
+                    "remote_name": remote_branch,
                     "latest_commit_id": str(commit.id),
                     "commit_count": commit_count,
                     "repository": repo_name,
@@ -204,7 +212,7 @@ class GitRepoParser:
                     "file_diff":diff_file,
                 })
             except Exception as e:
-                logger.warning(f"Failed to process branch '{branch_name}': {e}")
+                logger.warning(f"Failed to process branch '{remote_branch}': {e}")
 
         self.nodes["branches"] = branch_dicts
         return branch_dicts

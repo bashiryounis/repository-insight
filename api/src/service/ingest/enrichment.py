@@ -4,8 +4,6 @@ from asyncio import Lock
 from src.core.config import config
 from src.core.db import get_session
 from src.utils.helper import generate_stable_id
-from src.agent.ingest.base import run_code_analysis_agent
-from src.service.ingest.embedding import add_embeddings
 from src.service.ingest.node import create_class_node, create_method_node, create_script_node
 from src.service.ingest.relationship import queue_dependency_relationships_safe 
 
@@ -31,7 +29,8 @@ async def enrich_file_node(session,path,name, state):
         # Return the updated node
         updated_node = await result.single()
         logger.info(f"Successfully updated node: {updated_node}")
-
+        
+        from src.service.ingest.embedding import add_embeddings
         add_embeddings(
             session=session,
             node_label=config.FILE_LABEL,
@@ -148,6 +147,7 @@ async def analyze_and_enrich(
     dep_lock: Lock
 ):
     """Run code analysis and enrich the knowledge graph with the results."""
+    from src.agent.ingest.base import run_code_analysis_agent
 
     state = await run_code_analysis_agent(file_path=full_path, repo_base=repo_base)
     await enrich_kg(
