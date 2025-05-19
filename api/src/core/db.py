@@ -1,22 +1,22 @@
-import asyncio
-from neo4j import AsyncGraphDatabase
 from src.core.config import config
 
-driver = AsyncGraphDatabase.driver(
-    config.NEO4J_URI, 
-    auth=(config.NEO4J_USERNAME, config.NEO4J_PASSWORD)
-)
+_driver = None
+
+def get_driver():
+    global _driver
+    if _driver is None:
+        from neo4j import AsyncGraphDatabase
+        _driver = AsyncGraphDatabase.driver(
+            config.NEO4J_URI,
+            auth=(config.NEO4J_USERNAME, config.NEO4J_PASSWORD)
+        )
+    return _driver
 
 def get_session():
-    """
-    Returns an asynchronous session from the global Neo4j driver.
-    Usage example:
-      async with get_session() as session:
-          result = await session.run("MATCH (n) RETURN n LIMIT 1")
-    """
-    return driver.session()
+    return get_driver().session()
 
 async def close_driver():
-    """Closes the global Neo4j driver."""
-    await driver.close()
-
+    global _driver
+    if _driver:
+        await _driver.close()
+        _driver = None
