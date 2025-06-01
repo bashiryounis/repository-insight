@@ -1,101 +1,189 @@
-# RepoInsight
+# Repository Insight Service
 
-Below is an outline of a roadmap to design your Neo4j graph database for repository analysis. This roadmap is meant to provide a high-level blueprint, which you can later refine with your specific domain details and coding requirements.
+A powerful service that transforms code repositories into intelligent knowledge graphs using Neo4j, enabling advanced analysis and deep codebase understanding through AI-powered insights.
 
----
+##  Overview
 
-### 1. Define the Core Entities (Nodes)
+Repository Insight Service automatically ingests Git repositories and creates comprehensive knowledge graphs that capture the structure, relationships, and semantics of your codebase. It leverages LLM-powered analysis and vector embeddings to enable intelligent querying and exploration of codebases at scale.
 
-- **Project/Repository Node:**  
-  - Represents the entire codebase/repository.
-  - Properties: repository name, base directory, description, etc.
+##  Key Features
 
-- **Folder/Directory Nodes:**  
-  - Each directory becomes a node.
-  - Properties: folder name, absolute/relative path, metadata (e.g., creation date), etc.
+###  Knowledge Graph Construction
+- **Multi-node Architecture**: Creates structured nodes for files, folders, commits, branches, classes, methods, and scripts
+- **Rich Relationships**: Establishes meaningful connections between code entities
+- **Git Integration**: Full Git history analysis with commit tracking and branch relationships
+- **Hierarchical Structure**: Maintains repository folder/file hierarchy
 
-- **File Nodes:**  
-  - Represents individual files.
-  - Properties: file name, path, size, type, last modified, etc.
+###  AI-Powered Analysis
+- **LLM Enhancement**: Generates intelligent descriptions for code entities using Gemini
+- **Vector Embeddings**: Enables semantic search and similarity matching
+- **Multi-Agent System**: Specialized agents for discovery, research, and relationship analysis
+- **Real-time Streaming**: WebSocket-based streaming responses for interactive analysis
 
-- **Code/Code Snippet Nodes (Future Phase):**  
-  - For finer-grained code analysis, split file content into nodes representing logical segments (functions, classes, blocks).
-  - Properties: code segment identifier, summary/description (populated later by the agent), starting line, ending line, etc.
+### 🔍 Advanced Querying
+- **Semantic Search**: Find code based on functionality rather than just keywords
+- **Dependency Analysis**: Track relationships and dependencies between code components
+- **Path Finding**: Discover connections between any two code entities
+- **Context-Aware Insights**: Understand code structure and relationships at multiple levels
 
-- **Agent/Analysis Nodes (Future Phase):**  
-  - To capture results from QA or reporting agents.
-  - Properties: analysis type, generated description, quality score, issues flagged, etc.
+##  Architecture
 
----
+### Knowledge Graph Schema
 
-### 2. Establish Relationships
+**Nodes:**
+- **Repository**: Top-level container with metadata and project tree
+- **Branch**: Git branches with commit tracking and file diffs
+- **Commit**: Individual commits with touched files and relationships
+- **Folder**: Directory structure with hierarchical organization  
+- **File**: Source files with content and metadata
+- **Class**: Code classes with descriptions and content
+- **Method**: Functions/methods with detailed analysis
+- **Script**: Standalone scripts and utilities
 
-- **Hierarchy in Repository:**  
-  - **`CONTAINS` or `HAS_CHILD` Relationship:**  
-    - **Project → Folder/File:** The base node connects directly to folders and files in the root directory.
-    - **Folder → Subfolder/File:** Folders will have relationships with their child folders and files.  
-    - Example: `(Project)-[:CONTAINS]->(Folder)`, `(Folder)-[:CONTAINS]->(File)`
+**Relationships:**
+- `Repository` → `HAS_BRANCH` → `Branch`
+- `Branch` → `CONTAINS_COMMIT` → `Commit`
+- `Commit` → `MODIFIED_FILE` → `File`
+- `Repository/Folder` → `CONTAINS` → `File/Folder`
+- `File` → `DEPENDS_ON` → `File` (dependency relationships)
 
-- **Code Structure (Future Phase):**  
-  - **`HAS_CODE` or `PART_OF` Relationship:**  
-    - **File → Code Snippet:** Each file can be broken into smaller code nodes.
-    - This allows you to map function boundaries, classes, or specific code blocks.
+### Multi-Agent System
 
-- **Descriptive/Reporting Relationships:**  
-  - **`DESCRIBED_BY` or `ANALYZED_BY` Relationship:**  
-    - **Node (Folder/File/Code) → Agent/Analysis Node:** Attach agent-generated descriptions or analysis to specific nodes.
-    - This can be used to quickly query quality metrics or code patterns later on.
+**PlannerAgent**: Central coordinator that orchestrates analysis workflows
+- Routes queries to appropriate specialized agents
+- Synthesizes results from multiple agents
+- Provides comprehensive responses
 
----
+**DiscoveryAgent**: Entity identification and extraction
+- Locates specific code entities (files, classes, methods)
+- Performs targeted graph searches
+- Extracts relevant code snippets
 
-### 3. Roadmap for Phases
+**RelationResolverAgent**: Relationship and dependency analysis
+- Maps dependencies between code entities
+- Finds structural paths in the codebase
+- Analyzes architectural relationships
 
-#### **Phase 1: Basic Structure**
-- **Repository Scan & Data Extraction:**  
-  - Use pygit2 to extract the repository structure.
-  - Create Project, Folder, and File nodes in Neo4j.
-  - Establish the `CONTAINS` relationships according to the directory hierarchy.
+**ResearcherAgent**: Semantic search and content analysis
+- Performs vector similarity searches
+- Finds semantically related code
+- Provides context-aware recommendations
 
-- **Graph Population Example:**  
-  - Root project node connects to top-level directories and files.
-  - Each directory recursively connects to its subdirectories and contained files.
+##  Getting Started
 
-#### **Phase 2: Agent-Enhanced Descriptions**
-- **Agent Integration:**  
-  - Develop an agent that processes each file and folder to generate descriptive metadata.
-  - Update node properties (or create new relationship nodes) with this metadata.
+### Prerequisites
+- Python 3.8+
+- Neo4j database
+- Docker , Docker compose 
 
-- **Property Enrichment:**  
-  - For every Folder/File node, include properties like summary, code patterns, and basic quality metrics.
 
-#### **Phase 3: Detailed Code Analysis**
-- **Granular Code Breakdown:**  
-  - Split files into smaller units (functions, classes, code blocks) and represent each as a node.
-  - Create relationships such as `(File)-[:HAS_CODE]->(CodeSnippet)`.
+### Installation
 
-- **Reporting & Analysis Agents:**  
-  - Build specialized agents for reporting, QA, and further analysis.
-  - These agents can attach additional nodes or update existing nodes with analysis results (e.g., code smells, complexity scores).
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/bashiryounis/repository-insight.git
+   cd repository-insight 
+   ```
 
-#### **Phase 4: Advanced Query & Reporting Layer**
-- **Reporting and Query Mechanisms:**  
-  - Develop queries that traverse the graph to answer questions like “Which files have high complexity?” or “What are the patterns in directory structures?”
-  - Integrate visualization or dashboards based on these queries for easier analysis.
 
----
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Neo4j credentials and API keys
+   ```
 
-### 4. Considerations & Best Practices
+3. **Start the service**
+   ```bash
+   sudo make dev
+   ```
 
-- **Data Consistency:**  
-  - Maintain consistency when updating nodes with agent descriptions. Use clear naming conventions for node labels and relationship types.
+4. **Frontend** 
+  ```bash
+  cd frontend
+  pnpm dev 
+  ```
 
-- **Scalability:**  
-  - Plan for large repositories by considering indexing frequently queried properties (e.g., file paths, project names).
 
-- **Iterative Development:**  
-  - Start with the basic hierarchical structure and gradually add layers of analysis.
-  - Validate each phase with real repository data to ensure the model supports your intended queries and reporting needs.
+##  API Usage
 
-- **Query Flexibility:**  
-  - Ensure that the graph design allows for flexible querying. For example, a query might need to traverse from a high-level project down to specific code snippets to identify patterns.
+### Repository Ingestion
+
+**Ingest a Git repository:**
+```bash
+POST /ingest
+{
+  "repo_url": "https://github.com/user/repository.git"
+}
+```
+
+**List ingested repositories:**
+```bash
+GET /repos
+```
+
+### Intelligent Querying
+
+**WebSocket connection for real-time analysis:**
+```javascript
+const ws = new WebSocket('ws://localhost:8000/ws/insight');
+ws.send(JSON.stringify({
+  "query": "Find all authentication-related files in this repository"
+}));
+```
+
+**Example queries:**
+- "Show me all files that depend on the authentication module"
+- "Find classes that handle database connections"
+- "What are the main entry points of this application?"
+- "Show me the relationship between user management and payment processing"
+
+## 🛠️ Technical Stack
+
+- **Backend**: FastAPI with async/await support
+- **Database**: Neo4j graph database with vector indexes
+- **AI/ML**: Google Gemini for LLM analysis, custom embeddings
+- **Git Integration**: pygit2 for repository parsing
+- **Agent Framework**: LlamaIndex workflow system
+- **Communication**: WebSocket for real-time streaming
+
+## 📁 Project Structure
+
+```
+src/
+├── agent/                 # AI agents and workflows
+│   ├── ingest/           # Code analysis agents
+│   ├── insight/          # Query and insight agents
+│   └── llm.py           # LLM configuration
+├── core/                 # Core configuration and database
+├── service/              # Business logic services
+│   ├── ingest/          # Repository ingestion pipeline
+│   └── websocket/       # Real-time communication
+└── utils/               # Utility functions and helpers
+```
+
+##  Configuration
+
+Key configuration options in `src/core/config.py`:
+
+- **Neo4j Connection**: Database credentials and connection settings
+- **LLM Settings**: API keys and model configurations  
+- **Repository Storage**: Local storage paths for cloned repositories
+- **Vector Indexes**: Embedding and search configurations
+
+## 🎮 Use Cases
+
+### Code Exploration
+- **New Developer Onboarding**: Quickly understand large codebases
+- **Architecture Analysis**: Discover system boundaries and dependencies
+- **Code Navigation**: Find related functionality across the codebase
+
+### Maintenance & Refactoring
+- **Impact Analysis**: Understand the effect of changes before implementation
+- **Dead Code Detection**: Identify unused or isolated components
+- **Dependency Management**: Track and optimize inter-module dependencies
+
+### Documentation & Knowledge Management
+- **Automated Documentation**: Generate insights about code structure and purpose
+- **Knowledge Preservation**: Capture institutional knowledge about the codebase
+- **Code Quality Assessment**: Identify patterns and anti-patterns
 
