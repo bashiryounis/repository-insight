@@ -2,12 +2,11 @@ import os
 import fnmatch
 import logging
 from src.utils.helper import get_tree
+import pygit2
 
 logger = logging.getLogger(__name__)
 
-class GitRepoParser:
-    import pygit2
-    
+class GitRepoParser:    
     def __init__(self, repo_path: str):
         self.repo_path = repo_path
         self.repo = pygit2.Repository(repo_path)
@@ -165,57 +164,85 @@ class GitRepoParser:
 
 
     def get_branches(self):
-        branch_dicts = []
+        all_branches = {}
         repo_name = self.nodes["metadata"].get("name", "unknown")
         default_branch = self.nodes["metadata"].get("default_branch")
 
-        # print("--"*150)
-        print("--"*150)
-        
-        # logger.info("Listing local branches: %s", list(self.repo.branches.local))
-        logger.info("Listing remote branches: %s", list(self.repo.branches.remote))
+        local_branches = self.repo.branches.local
+        remote_branches = self.repo.branches.remote
 
+        logger.info("Listing local branches: %s", list(local_branches))
+        logger.info("Listing remote branches: %s", list(remote_branches))
 
-        for remote_branch in self.repo.branches.remote:
+        # === First pass: local branches ===
+        for branch_name in local_branches:
             try:
-                branch_ref = self.repo.branches.local.get(remote_branch)
-                if not branch_ref:
-                    continue
-
+                branch_ref = local_branches[branch_name]
                 commit = self.repo[branch_ref.target]
-
-                try:
-                    branch_tree_string = self._get_tree_from_commit(branch_ref.target)
-                except Exception as e:
-                    logger.warning(f"Failed to extract tree for branch '{remote_branch}': {e}")
-                    branch_tree_string = ""
-
-                # Count commits
+                branch_tree = self._get_tree_from_commit(branch_ref.target)
                 commit_count = sum(1 for _ in self.repo.walk(commit.id, pygit2.GIT_SORT_TOPOLOGICAL))
 
-                # Diff with default branch (skip if same)
-                diff_file = {}
-                if default_branch and remote_branch != default_branch:
-                    diff_file = self.diff_files_between_branches(self.repo, default_branch, remote_branch)
-
-                branch_dicts.append({
-                    "name": remote_branch,
+                all_branches[branch_name] = {
+                    "name": branch_name,
                     "is_head": branch_ref.is_head(),
-                    "is_default": remote_branch == default_branch,
-                    "is_remote_tracking": True,
+                    "is_default": branch_name == default_branch,
+                    "is_remote_tracking": False,
                     "upstream_name": None,
-                    "remote_name": remote_branch,
+                    "remote_name": None,
                     "latest_commit_id": str(commit.id),
                     "commit_count": commit_count,
                     "repository": repo_name,
-                    "tree": branch_tree_string,
-                    "file_diff":diff_file,
-                })
+                    "tree": branch_tree,
+                    "file_diff": {}
+                }
             except Exception as e:
-                logger.warning(f"Failed to process branch '{remote_branch}': {e}")
+                logger.warning(f"Failed to process local branch '{branch_name}': {e}")
 
-        self.nodes["branches"] = branch_dicts
-        return branch_dicts
+        # === Second pass: remote branches ===
+        for remote_branch_name in remote_branches:
+            if remote_branch_name == "origin/HEAD":
+                continue
+
+            short_name = remote_branch_name.split("/", 1)[-1]
+            try:
+                branch_ref = remote_branches[remote_branch_name]
+                commit = self.repo[branch_ref.target]
+                branch_tree = self._get_tree_from_commit(branch_ref.target)
+                commit_count = sum(1 for _ in self.repo.walk(commit.id, pygit2.GIT_SORT_TOPOLOGICAL))
+
+                # Merge if local already exists
+                branch_info = all_branches.get(short_name, {
+                    "name": short_name,
+                    "is_head": False,
+                    "is_default": short_name == default_branch,
+                    "is_remote_tracking": True,
+                    "upstream_name": None,
+                    "remote_name": remote_branch_name,
+                    "latest_commit_id": str(commit.id),
+                    "commit_count": commit_count,
+                    "repository": repo_name,
+                    "tree": branch_tree,
+                    "file_diff": {}
+                })
+
+                # If branch already exists from local, just add remote info
+                branch_info["is_remote_tracking"] = True
+                branch_info["remote_name"] = remote_branch_name
+                branch_info["latest_commit_id"] = str(commit.id)  # Use remote as source of truth
+
+                # Compute diff if needed
+                if default_branch and short_name != default_branch:
+                    branch_info["file_diff"] = self.diff_files_between_branches(self.repo, default_branch, short_name)
+
+                all_branches[short_name] = branch_info
+
+            except Exception as e:
+                logger.warning(f"Failed to process remote branch '{remote_branch_name}': {e}")
+
+        self.nodes["branches"] = list(all_branches.values())
+        return self.nodes["branches"]
+
+
 
     @staticmethod
     def _commit_name(message: str, max_words: int = 10, max_chars: int = 60) -> str:
@@ -228,62 +255,70 @@ class GitRepoParser:
         return first_line
 
     def collect_all_commits(self):
-        commits = []
-        visited = set()
+        commits={}
         repo_name = self.nodes["metadata"].get("name", "unknown")
+        normalized_branches = self.nodes.get("branches", [])
 
-        for ref_name in self.repo.references:
-            if not ref_name.startswith("refs/heads/"):
-                continue
+        for branch in normalized_branches:
+            branch_name = branch["name"]
+            ref = None
 
-            branch_name = ref_name.split("/")[-1]
             try:
-                target = self.repo.lookup_reference(ref_name).target
+                if f"refs/heads/{branch_name}" in self.repo.references:
+                    ref = self.repo.references.get(f"refs/heads/{branch_name}")
+                elif f"refs/remotes/origin/{branch_name}" in self.repo.references:
+                    ref = self.repo.references.get(f"refs/remotes/origin/{branch_name}")
+                else:
+                    logger.warning(f"Reference for branch '{branch_name}' not found")
+                    continue
+
+                target = ref.target
                 for commit in self.repo.walk(target, pygit2.GIT_SORT_TIME):
                     cid = str(commit.id)
-                    if cid in visited:
-                        continue
-                    visited.add(cid)
 
-                    if not commit.parents:
-                        continue
+                    if cid not in commits:
+                        # First time seeing this commit
+                        touched_files = []
+                        if commit.parents:
+                            try:
+                                diff = self.repo.diff(commit.parents[0], commit)
+                                for patch in diff:
+                                    full_path = os.path.normpath(os.path.join(repo_name, patch.delta.new_file.path))
+                                    lines = []
+                                    for hunk in patch.hunks:
+                                        lines.append(hunk.header)
+                                        lines.extend(f"{line.origin}{line.content.strip()}" for line in hunk.lines)
+                                    touched_files.append({
+                                        "file_path": full_path,
+                                        "diff": "\n".join(lines)
+                                    })
+                            except Exception as e:
+                                logger.warning(f"Diff failed for commit {cid}: {e}")
 
-                    parent = commit.parents[0]
-                    try:
-                        diff = self.repo.diff(parent, commit)
-                    except Exception as e:
-                        logger.warning(f"Diff failed for commit {cid}: {e}")
-                        continue
+                        commits[cid] = {
+                            "id": cid,
+                            "name": self._commit_name(commit.message),
+                            "message": commit.message.strip(),
+                            "author": commit.author.name,
+                            "email": commit.author.email,
+                            "timestamp": commit.commit_time,
+                            "parents": [str(p.id) for p in commit.parents],
+                            "branches": set(),  # Will be converted to list
+                            "repository": repo_name,
+                            "touched_files": touched_files,
+                        }
 
-                    touched_files = []
-                    for patch in diff:
-                        full_path = os.path.normpath(os.path.join(repo_name, patch.delta.new_file.path))
-                        lines = []
-                        for hunk in patch.hunks:
-                            lines.append(hunk.header)
-                            lines.extend(f"{line.origin}{line.content.strip()}" for line in hunk.lines)
-                        touched_files.append({
-                            "file_path": full_path,
-                            "diff": "\n".join(lines)
-                        })
+                    # Always add current normalized branch name
+                    commits[cid]["branches"].add(branch_name)
 
-                    commits.append({
-                        "id": cid,
-                        "name": self._commit_name(commit.message),
-                        "message": commit.message.strip(),
-                        "author": commit.author.name,
-                        "email": commit.author.email,
-                        "timestamp": commit.commit_time,
-                        "parents": [str(p.id) for p in commit.parents],
-                        "branch": branch_name,
-                        "repository": repo_name,
-                        "touched_files": touched_files,
-                    })
             except Exception as e:
-                logger.warning(f"Failed to process branch {branch_name}: {e}")
+                logger.warning(f"Failed to walk branch '{branch_name}': {e}")
 
-        self.nodes["commits"] = commits
-        return commits
+        self.nodes["commits"] = [
+            {**c, "branches": sorted(list(c["branches"]))}
+            for c in commits.values()
+        ]
+        return self.nodes["commits"]
 
     def get_tree_dicts(self, commit):
         tree = commit.tree
