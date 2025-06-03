@@ -134,7 +134,7 @@ async def create_commit_node(session, node):
     """
     commit_id = node["id"]
     repo_name = node["repository"]
-    branch_name = node["branch"]
+    branch_names = node.get("branches", [])
 
     logger.info(f"Creating commit node: {commit_id}...")
 
@@ -149,7 +149,7 @@ async def create_commit_node(session, node):
                 c.email = $email,
                 c.timestamp = $timestamp,
                 c.repository = $repository,
-                c.branch = $branch
+                c.branches = $branches
             RETURN c
             """,
             node_id=commit_id,
@@ -159,27 +159,26 @@ async def create_commit_node(session, node):
             email=node["email"],
             timestamp=node["timestamp"],
             repository=repo_name,
-            branch=branch_name
+            branches=branch_names
         )
         record = await result.single()
 
         # Relate commit → branch
-        await session.run(
-            f"""
-            MATCH (c:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
-            MATCH (b:{config.BRANCH_LABEL} {{ name: $branch_name, repository: $repository }})
-            MERGE (b)-[:CONTAINS_COMMIT]->(c)
-            """,
-            commit_id=commit_id,
-            branch_name=branch_name,
-            repository=repo_name
-        )
+        for branch_name in branch_names:
+            await session.run(
+                f"""
+                MATCH (c:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
+                MATCH (b:{config.BRANCH_LABEL} {{ name: $branch_name, repository: $repository }})
+                MERGE (b)-[:CONTAINS_COMMIT]->(c)
+                """,
+                commit_id=commit_id,
+                branch_name=branch_name,
+                repository=repo_name
+            )
+
 
         # Relate commit → files
         for f in node.get("touched_files", []):
-            print("#"*250)
-            print(f)
-            print("#"*250)
             await session.run(
                 f"""
                 MATCH (c:{config.COMMIT_LABEL} {{ node_id: $commit_id }})
