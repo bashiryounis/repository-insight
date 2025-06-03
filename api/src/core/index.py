@@ -31,7 +31,6 @@ def get_vector_store(
 _vector_store_cache = {}
 
 def get_index_for_label_field(label: str, field: str = None):
-    from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
     key = f"{label}:{field}"
     if key in _vector_store_cache:
         return _vector_store_cache[key]
