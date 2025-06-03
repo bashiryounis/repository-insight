@@ -32,11 +32,6 @@ async def ingest_repo(cloned_repo: pygit2.Repository):
          # --- Parse repo structure using GitRepoParser ---
         parser = GitRepoParser(repo_path)
         nodes = parser.get_nodes()
-        print("#"*125)
-        print(nodes["branches"])
-        print("#"*125)
-        print("#"*125)
-        return 
         
         async with get_session() as session:
             await create_repository_node(
