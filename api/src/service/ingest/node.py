@@ -55,6 +55,7 @@ async def create_branch_node(session, node):
         query = f"""
             MERGE (b:{config.BRANCH_LABEL} {{ node_id: $node_id }})
             SET b.name = $name, 
+                b.remote_name = $remote_name,
                 b.is_head = $is_head,
                 b.is_default = $is_default,
                 b.is_remote_tracking = $is_remote_tracking,
